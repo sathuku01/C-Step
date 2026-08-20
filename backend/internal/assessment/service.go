@@ -22,6 +22,22 @@ func NewService(client *climatiq.Client) *Service {
 	}
 }
 
+func confidenceFromEvidence(evidence string) string {
+	switch evidence {
+	case EvidenceUtilityBill, EvidenceReceipt, EvidenceMeter:
+		return "high"
+
+	case EvidenceBusinessRecord:
+		return "medium"
+
+	case EvidenceEstimate:
+		return "low"
+
+	default:
+		return "unverified"
+	}
+}
+
 func (s *Service) Calculate(
 	ctx context.Context,
 	input CreateAssessmentRequest,
@@ -61,8 +77,10 @@ func (s *Service) Calculate(
 		result.Breakdown = append(
 			result.Breakdown,
 			EmissionBreakdown{
-				Category: "electricity",
-				CO2eKg:   electricity.CO2e,
+				Category:   "electricity",
+				CO2eKg:     electricity.CO2e,
+				Evidence:   input.ElectricityEvidence,
+				Confidence: confidenceFromEvidence(input.ElectricityEvidence),
 			},
 		)
 
@@ -117,6 +135,59 @@ func (s *Service) Calculate(
 		)
 
 		result.TotalCO2eKg += transport.CO2e
+	}
+
+	// --------------------------------
+	// FUEL
+	// --------------------------------
+
+	if input.Fuel != nil && input.Fuel.Litres > 0 {
+
+		var activityID string
+
+		switch input.Fuel.Type {
+		case "diesel":
+			activityID = "fuel-type_diesel-fuel_use_na"
+
+		default:
+			return nil, fmt.Errorf(
+				"unsupported fuel type: %s",
+				input.Fuel.Type,
+			)
+		}
+
+		fuel, err := s.climatiq.Estimate(
+			ctx,
+			climatiq.EstimateRequest{
+				EmissionFactor: climatiq.EmissionFactorSelector{
+					ActivityID:  activityID,
+					DataVersion: "^21",
+					Region:      "NL",
+					Year:        2022,
+				},
+				Parameters: map[string]interface{}{
+					"volume":      input.Fuel.Litres,
+					"volume_unit": "l",
+				},
+			},
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf(
+				"calculate fuel emissions: %w",
+				err,
+			)
+		}
+
+		result.Breakdown = append(
+			result.Breakdown,
+			EmissionBreakdown{
+				Category: "fuel",
+				CO2eKg:   fuel.CO2e,
+			},
+		)
+
+		result.TotalCO2eKg += fuel.CO2e
 	}
 
 	return result, nil
