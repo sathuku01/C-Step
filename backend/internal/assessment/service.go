@@ -1,10 +1,10 @@
 package assessment
 
 import (
+	"c-step/internal/badge"
+	"c-step/internal/emissions/climatiq"
 	"context"
 	"fmt"
-
-	"c-step/internal/emissions/climatiq"
 )
 
 const (
@@ -14,11 +14,16 @@ const (
 
 type Service struct {
 	climatiq *climatiq.Client
+	badge    *badge.Service
 }
 
-func NewService(client *climatiq.Client) *Service {
+func NewService(
+	client *climatiq.Client,
+	badgeService *badge.Service,
+) *Service {
 	return &Service{
 		climatiq: client,
+		badge:    badgeService,
 	}
 }
 
@@ -129,8 +134,10 @@ func (s *Service) Calculate(
 		result.Breakdown = append(
 			result.Breakdown,
 			EmissionBreakdown{
-				Category: "transport",
-				CO2eKg:   transport.CO2e,
+				Category:   "transport",
+				CO2eKg:     transport.CO2e,
+				Evidence:   input.Transport.Evidence,
+				Confidence: confidenceFromEvidence(input.Transport.Evidence),
 			},
 		)
 
@@ -182,12 +189,30 @@ func (s *Service) Calculate(
 		result.Breakdown = append(
 			result.Breakdown,
 			EmissionBreakdown{
-				Category: "fuel",
-				CO2eKg:   fuel.CO2e,
+				Category:   "fuel",
+				CO2eKg:     fuel.CO2e,
+				Evidence:   input.Fuel.Evidence,
+				Confidence: confidenceFromEvidence(input.Fuel.Evidence),
 			},
 		)
 
 		result.TotalCO2eKg += fuel.CO2e
+	}
+
+	badgeResult, err := s.badge.Evaluate(
+		result.TotalCO2eKg,
+		input.Sector,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("evaluate badge: %w", err)
+	}
+
+	result.Badge = &BadgeResult{
+		Tier:            string(badgeResult.Tier),
+		RatioToBaseline: badgeResult.RatioToBaseline,
+		BaselineCO2eKg:  badgeResult.BaselineCO2eKg,
+		BaselineSector:  badgeResult.BaselineSector,
 	}
 
 	return result, nil
