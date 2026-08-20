@@ -9,10 +9,11 @@ const (
 )
 
 type CreateAssessmentRequest struct {
-	ElectricityKWh float64         `json:"electricity_kwh"`
-	ElectricityEvidence string     `json:"electricity_evidence"`
-	Fuel           *FuelInput      `json:"fuel,omitempty"`
-	Transport      *TransportInput `json:"transport,omitempty"`
+	ElectricityKWh      float64         `json:"electricity_kwh"`
+	ElectricityEvidence string          `json:"electricity_evidence"`
+	Sector              string          `json:"sector"`
+	Fuel                *FuelInput      `json:"fuel,omitempty"`
+	Transport           *TransportInput `json:"transport,omitempty"`
 }
 
 type FuelInput struct {
@@ -35,6 +36,14 @@ type EmissionBreakdown struct {
 }
 
 type AssessmentResult struct {
-	TotalCO2eKg float64             `json:"total_co2e_kg"`
-	Breakdown   []EmissionBreakdown `json:"breakdown"`
+    TotalCO2eKg float64             `json:"total_co2e_kg"`
+    Breakdown   []EmissionBreakdown `json:"breakdown"`
+    Badge       *BadgeResult       `json:"badge,omitempty"`
+}
+
+type BadgeResult struct {
+    Tier            string  `json:"tier"`
+    RatioToBaseline float64 `json:"ratio_to_baseline"`
+    BaselineCO2eKg  float64 `json:"baseline_co2e_kg"`
+    BaselineSector  string  `json:"baseline_sector"`
 }
