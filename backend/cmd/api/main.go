@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"c-step/internal/badge"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
@@ -24,12 +25,23 @@ func main() {
 	router := gin.Default()
 
 	emissionsHandler := api.NewEmissionsHandler(climatiqClient)
+	// assessmentService := assessment.NewService(climatiqClient)
+	baselineStore := badge.NewStaticBaselineStore()
 
-	assessmentService := assessment.NewService(climatiqClient)
+	baselineStore.Add(badge.Baseline{
+    Sector:  "general",
+    CO2eKg:  5000,
+    Version: "v1",
+})
 
-	assessmentHandler := api.NewAssessmentHandler(
-		assessmentService,
+
+	badgeService := badge.NewService(baselineStore)
+	assessmentService := assessment.NewService(
+		climatiqClient,
+		badgeService,
 	)
+
+	assessmentHandler := api.NewAssessmentHandler(assessmentService)
 
 	v1 := router.Group("/api/v1")
 	{
