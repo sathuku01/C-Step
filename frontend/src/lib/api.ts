@@ -3,39 +3,41 @@
  *
  * Endpoints:
  * - GET /health
+ * - POST /auth/register
+ * - POST /auth/login
+ * - GET /auth/me
+ * - GET /directory
  * - POST /assessments
  * - GET /assessments
  * - POST /assessments/calculate
  * - GET /assessments/{id}
+ * - GET /assessments/{id}/verify
+ * - POST /assessments/{id}/anchor
+ * - GET /assessments/{id}/blockchain-status
  * - GET /dashboard
  * - POST /emissions/estimate
- *
- * The local backend is optional: reads probe `GET {BASE}/health`.
- * If offline or unreachable, the UI gracefully falls back to mock/demo data.
  */
-import {
-  mockDashboard,
-  mockDirectory,
-  mockAssessments,
-  mockAssessmentDashboard,
-  type DashboardData,
-  type DirectoryEntry,
-} from "../data/mock";
-import { estimate, type EstimateInput, type EstimateResult } from "./carbon";
 
 export const API_BASE =
   (import.meta.env["VITE_API_URL"] as string | undefined)?.replace(/\/$/, "") ??
-  "http://192.168.89.149:8000/api/v1";
+  "http://localhost:8000/api/v1";
 
-export type DataSource = "live" | "mock";
-
-export interface Sourced<T> {
-  data: T;
-  source: DataSource;
-}
+export const TOKEN_KEY = "cstep.token";
 
 export interface HealthResponse {
   status: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  company: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: User;
 }
 
 export type EvidenceType = "utility_bill" | "receipt" | "meter" | "business_record" | "estimate";
@@ -74,17 +76,38 @@ export interface BadgeResult {
   baseline_sector: string;
 }
 
+export interface VerificationResult {
+  level: string;
+  verifiable: boolean;
+  report_hash?: string;
+  hashed_at?: string;
+}
+
 export interface AssessmentResult {
   id: string;
   total_co2e_kg: number;
   breakdown: AssessmentBreakdownItem[];
   badge?: BadgeResult | null;
+  verification?: VerificationResult | null;
 }
 
 export interface AssessmentDashboard {
   total_assessments: number;
   total_co2e_kg: number;
   latest_assessment?: AssessmentResult;
+}
+
+export interface DirectoryEntry {
+  id: string;
+  name: string;
+  sector: string;
+  sectorLabel: string;
+  location: string;
+  score: number;
+  tonnes: number;
+  tier: string;
+  employees: number;
+  verifiedSources: string[];
 }
 
 export interface EstimateParameters {
@@ -141,21 +164,62 @@ export interface EstimateResponse {
   notices?: EstimateNotice[];
 }
 
+export interface AnchorResult {
+  tx_hash: string;
+  token_id: number;
+  block_number: number;
+  anchored_at: string;
+}
+
+export interface BadgeStatus {
+  anchored: boolean;
+  token_id?: number;
+  tx_hash?: string;
+  block_number?: number;
+  anchored_at?: string;
+  tier?: string;
+}
+
 export interface ApiErrorResponse {
   error: string;
   details?: string;
 }
 
-const TIMEOUT_MS = 3500;
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+    this.name = "ApiError";
+  }
+}
+
+export interface MicroEstimateInput {
+  sector: string;
+  employees: number;
+  monthlyEnergySpend: number;
+}
+
+const TIMEOUT_MS = 10000;
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+    if (typeof window !== "undefined") {
+      const token = window.localStorage.getItem(TOKEN_KEY);
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
     const res = await fetch(`${API_BASE}${path}`, {
       ...init,
       signal: controller.signal,
-      headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+      headers: { ...headers, ...(init?.headers ?? {}) },
     });
 
     if (!res.ok) {
@@ -168,7 +232,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       } catch {
         // use default status message
       }
-      throw new Error(message);
+      throw new ApiError(message, res.status);
     }
     return (await res.json()) as T;
   } finally {
@@ -191,127 +255,81 @@ export async function getHealth(): Promise<HealthResponse> {
   return request<HealthResponse>("/health");
 }
 
-async function withFallback<T>(path: string, fallback: T, init?: RequestInit): Promise<Sourced<T>> {
-  if (!(await checkHealth())) return { data: fallback, source: "mock" };
-  try {
-    return { data: await request<T>(path, init), source: "live" };
-  } catch {
-    return { data: fallback, source: "mock" };
-  }
+export async function register(input: {
+  email: string;
+  password: string;
+  name: string;
+  company: string;
+}): Promise<LoginResponse> {
+  return request<LoginResponse>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
-export const getDashboard = () => withFallback<DashboardData>("/dashboard", mockDashboard);
-
-export const getDirectory = () => withFallback<DirectoryEntry[]>("/directory", mockDirectory);
-
-export async function postEstimate(input: EstimateInput): Promise<EstimateResult> {
-  const local = estimate(input);
-  return { ...local, source: "mock" };
+export async function login(email: string, password: string): Promise<LoginResponse> {
+  return request<LoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
 }
 
-/** GET /dashboard aggregates */
-export const getAssessmentDashboard = () =>
-  withFallback<AssessmentDashboard>(
-    "/dashboard",
-    mockAssessmentDashboard as unknown as AssessmentDashboard,
-  );
+export async function getMe(): Promise<User> {
+  return request<User>("/auth/me");
+}
 
-/** GET /assessments list */
-export const getAssessments = () =>
-  withFallback<AssessmentResult[]>(
-    "/assessments",
-    mockAssessments as unknown as AssessmentResult[],
-  );
+export async function getDirectory(): Promise<DirectoryEntry[]> {
+  return request<DirectoryEntry[]>("/directory");
+}
 
-/** GET /assessments/{id} */
+export async function getDashboard(): Promise<AssessmentDashboard> {
+  return request<AssessmentDashboard>("/dashboard");
+}
+
+export async function getAssessmentDashboard(): Promise<AssessmentDashboard> {
+  return request<AssessmentDashboard>("/dashboard");
+}
+
+export async function getAssessments(): Promise<AssessmentResult[]> {
+  return request<AssessmentResult[]>("/assessments");
+}
+
 export async function getAssessmentById(id: string): Promise<AssessmentResult> {
-  const isLive = await checkHealth();
-  if (isLive) {
-    return request<AssessmentResult>(`/assessments/${id}`);
-  }
-  // Offline mock fallback lookup
-  const found = mockAssessments.find((a) => a.id === id);
-  if (found) return found as unknown as AssessmentResult;
-  throw new Error(`Assessment with ID "${id}" not found`);
+  return request<AssessmentResult>(`/assessments/${id}`);
 }
 
-/** POST /assessments */
-export const createAssessment = (input: CreateAssessmentRequest) =>
-  request<AssessmentResult>("/assessments", {
+export async function createAssessment(input: CreateAssessmentRequest): Promise<AssessmentResult> {
+  return request<AssessmentResult>("/assessments", {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
 
-/** POST /assessments/calculate */
-export const calculateAssessment = (input: CreateAssessmentRequest) =>
-  request<AssessmentResult>("/assessments/calculate", {
+export async function calculateAssessment(input: CreateAssessmentRequest): Promise<AssessmentResult> {
+  return request<AssessmentResult>("/assessments/calculate", {
     method: "POST",
     body: JSON.stringify(input),
   });
-
-/** Mock Climatiq estimation calculation when backend is unreachable */
-function mockClimatiqEstimate(req: EstimateRequest): EstimateResponse {
-  let co2e = 0;
-  const unit = "kg";
-  let actVal = 1;
-  let actUnit = "unit";
-
-  if (req.parameters.energy !== undefined) {
-    actVal = Number(req.parameters.energy);
-    actUnit = String(req.parameters.energy_unit || "kWh");
-    co2e = actVal * 0.207; // ~0.207 kg CO2e / kWh UK grid factor
-  } else if (req.parameters.volume !== undefined) {
-    actVal = Number(req.parameters.volume);
-    actUnit = String(req.parameters.volume_unit || "l");
-    co2e = actVal * 2.68; // ~2.68 kg CO2e / L diesel
-  } else if (req.parameters.distance !== undefined) {
-    actVal = Number(req.parameters.distance);
-    actUnit = String(req.parameters.distance_unit || "km");
-    co2e = actVal * 0.165; // ~0.165 kg CO2e / km freight truck
-  } else if (req.parameters.money !== undefined) {
-    actVal = Number(req.parameters.money);
-    actUnit = String(req.parameters.money_unit || "usd");
-    co2e = actVal * 0.32; // spend-based EEIO factor
-  } else if (req.parameters.weight !== undefined) {
-    actVal = Number(req.parameters.weight);
-    actUnit = String(req.parameters.weight_unit || "kg");
-    co2e = actVal * 1.45;
-  } else {
-    co2e = 125.4;
-  }
-
-  return {
-    co2e: Math.round(co2e * 100) / 100,
-    co2e_unit: unit,
-    calculation_method: "ar6_gwp100",
-    calculation_origin: "climatiq_proxy_simulated",
-    activity_data: {
-      activity_value: actVal,
-      activity_unit: actUnit,
-    },
-    emission_factor: {
-      name: req.activity_id.replace(/[-_]/g, " "),
-      activity_id: req.activity_id,
-      id: `ef_${req.activity_id.slice(0, 12)}`,
-      access_type: "open_data",
-      source: "GHG Protocol / Climatiq Database",
-      source_dataset: "Government Emission Factors 2024",
-      year: req.year || 2024,
-      region: req.region || "GB",
-      category: "Fuel / Electricity / Transport",
-      source_lca_activity: "cradle-to-gate",
-      data_quality_flags: ["tier_1_verified", "uncertainty_low"],
-    },
-    notices: [
-      {
-        code: "NOTE_REGIONAL_BASELINE",
-        message: `Calculated using Climatiq standard factor dataset for ${req.region || "GB"}.`,
-      },
-    ],
-  };
 }
 
-/** POST /emissions/estimate */
+export async function verifyAssessment(id: string): Promise<VerificationResult> {
+  return request<VerificationResult>(`/assessments/${id}/verify`);
+}
+
+export async function anchorAssessment(
+  id: string,
+  recipientAddress?: string,
+): Promise<AnchorResult> {
+  return request<AnchorResult>(`/assessments/${id}/anchor`, {
+    method: "POST",
+    body: JSON.stringify({ recipient_address: recipientAddress || "" }),
+  });
+}
+
+export async function getBlockchainStatus(id: string): Promise<BadgeStatus> {
+  return request<BadgeStatus>(`/assessments/${id}/blockchain-status`);
+}
+
 export async function estimateEmissions(input: EstimateRequest): Promise<EstimateResponse> {
   return request<EstimateResponse>("/emissions/estimate", {
     method: "POST",
@@ -319,18 +337,17 @@ export async function estimateEmissions(input: EstimateRequest): Promise<Estimat
   });
 }
 
-/** POST /emissions/estimate with fallback */
-export async function estimateEmissionsWithFallback(
-  input: EstimateRequest,
-): Promise<Sourced<EstimateResponse>> {
-  const isLive = await checkHealth();
-  if (isLive) {
-    try {
-      const data = await estimateEmissions(input);
-      return { data, source: "live" };
-    } catch {
-      return { data: mockClimatiqEstimate(input), source: "mock" };
-    }
-  }
-  return { data: mockClimatiqEstimate(input), source: "mock" };
+export async function postEstimate(input: MicroEstimateInput): Promise<EstimateResponse> {
+  // Translate micro-calculator input to a real Climatiq factor estimate
+  const annualEnergyKwh = (input.monthlyEnergySpend || 0) * 12 * 2.5; // ~2.5 kWh per $
+  return estimateEmissions({
+    activity_id: "electricity-supply_grid-source_supplier_mix",
+    data_version: "^21",
+    region: "GB",
+    year: 2024,
+    parameters: {
+      energy: Math.max(10, annualEnergyKwh),
+      energy_unit: "kWh",
+    },
+  });
 }

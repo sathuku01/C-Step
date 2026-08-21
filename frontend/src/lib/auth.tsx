@@ -1,10 +1,3 @@
-/**
- * Session layer.
- *
- * Mirrors the data layer: every auth call first probes the local backend
- * (`POST /auth/login`, `POST /auth/signup`). If the backend is unreachable the
- * app falls back to a demo session so the whole flow stays walkable offline.
- */
 import {
   createContext,
   useCallback,
@@ -14,66 +7,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { API_BASE, checkHealth, type DataSource } from "./api";
+import { request, TOKEN_KEY, register, type LoginResponse } from "./api";
 
 export interface Account {
   id: string;
   email: string;
   name: string;
   company: string;
-  source: DataSource;
-}
-
-const STORAGE_KEY = "verdant.session";
-
-function readStored(): Account | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Account) : null;
-  } catch {
-    return null;
-  }
-}
-
-function demoAccount(email: string, name?: string, company?: string): Account {
-  const handle = email.split("@")[0] ?? "founder";
-  const domain = email.split("@")[1]?.split(".")[0] ?? "company";
-  const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  return {
-    id: `demo_${handle}`,
-    email,
-    name: name?.trim() || title(handle.replace(/[._-]+/g, " ")),
-    company: company?.trim() || title(domain),
-    source: "mock",
-  };
-}
-
-async function tryBackend(path: string, body: unknown): Promise<Account | null> {
-  if (!(await checkHealth())) return null;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 2500);
-  try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(String(res.status));
-    const data = (await res.json()) as Partial<Account>;
-    return {
-      id: data.id ?? "live",
-      email: data.email ?? String((body as { email?: string }).email ?? ""),
-      name: data.name ?? "",
-      company: data.company ?? "",
-      source: "live",
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+  source: "live";
 }
 
 interface AuthValue {
@@ -95,78 +36,95 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Restore session on startup
   useEffect(() => {
-    setAccount(readStored());
-    setReady(true);
+    async function restore() {
+      if (typeof window === "undefined") {
+        setReady(true);
+        return;
+      }
+      const token = window.localStorage.getItem(TOKEN_KEY);
+      if (!token) {
+        setReady(true);
+        return;
+      }
+      try {
+        const user = await request<{ id: string; email: string; name: string; company: string }>("/auth/me");
+        setAccount({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          company: user.company,
+          source: "live",
+        });
+      } catch (err) {
+        // Clear token since it's invalid
+        window.localStorage.removeItem(TOKEN_KEY);
+        setAccount(null);
+      } finally {
+        setReady(true);
+      }
+    }
+    void restore();
   }, []);
 
-  const persist = useCallback((next: Account | null) => {
-    setAccount(next);
-    try {
-      if (next) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      else window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* storage disabled — session stays in memory */
-    }
-  }, []);
+  const signIn = useCallback(async (email: string, password: string) => {
+    if (!email.includes("@")) throw new Error("Enter a valid work email.");
+    if (password.length < 6) throw new Error("Password must be at least 6 characters.");
 
-  const signIn = useCallback<AuthValue["signIn"]>(
-    async (email, password) => {
-      if (!email.includes("@")) throw new Error("Enter a valid work email.");
-      if (password.length < 6) throw new Error("Password must be at least 6 characters.");
-      const live = await tryBackend("/auth/login", { email, password });
-      const next = live ?? demoAccount(email);
-      persist(next);
-      return next;
-    },
-    [persist],
-  );
+    const res = await request<LoginResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
 
-  const signUp = useCallback<AuthValue["signUp"]>(
-  async ({ email, password, name, company }) => {
-    if (!name.trim()) {
-      throw new Error("Tell us your name.");
-    }
-
-    if (!company.trim()) {
-      throw new Error("Add your company name.");
-    }
-
-    if (!email.includes("@")) {
-      throw new Error("Enter a valid work email.");
-    }
-
-    if (password.length < 6) {
-      throw new Error(
-        "Password must be at least 6 characters.",
-      );
-    }
-
-    const response = await signup(
-      email.trim(),
-      password,
-    );
-
-    window.localStorage.setItem(
-      TOKEN_KEY,
-      response.token,
-    );
-
-    const account: Account = {
-      id: response.user.id,
-      email: response.user.email,
-      name: name.trim(),
-      company: company.trim(),
+    window.localStorage.setItem(TOKEN_KEY, res.token);
+    const next: Account = {
+      id: res.user.id,
+      email: res.user.email,
+      name: res.user.name,
+      company: res.user.company,
+      source: "live",
     };
+    setAccount(next);
+    return next;
+  }, []);
 
-    persist(account);
+  const signUp = useCallback(async (input: {
+    email: string;
+    password: string;
+    name: string;
+    company: string;
+  }) => {
+    if (!input.name.trim()) throw new Error("Tell us your name.");
+    if (!input.company.trim()) throw new Error("Add your company name.");
+    if (!input.email.includes("@")) throw new Error("Enter a valid work email.");
+    if (input.password.length < 6) throw new Error("Password must be at least 6 characters.");
 
-    return account;
-  },
-  [persist],
-);
+    const res = await register({
+      email: input.email.trim(),
+      password: input.password,
+      name: input.name.trim(),
+      company: input.company.trim(),
+    });
 
-  const signOut = useCallback(() => persist(null), [persist]);
+    window.localStorage.setItem(TOKEN_KEY, res.token);
+    const next: Account = {
+      id: res.user.id,
+      email: res.user.email,
+      name: res.user.name,
+      company: res.user.company,
+      source: "live",
+    };
+    setAccount(next);
+    return next;
+  }, []);
+
+  const signOut = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(TOKEN_KEY);
+    }
+    setAccount(null);
+  }, []);
 
   const value = useMemo<AuthValue>(
     () => ({ account, ready, signIn, signUp, signOut }),
@@ -183,5 +141,6 @@ export function useAuth(): AuthValue {
 }
 
 export function hasStoredSession(): boolean {
-  return readStored() !== null;
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(TOKEN_KEY) !== null;
 }

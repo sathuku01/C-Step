@@ -1,10 +1,10 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Search, ShieldCheck, Code2 } from "lucide-react";
+import { Search, ShieldCheck, Code2, AlertCircle } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
-import { getDirectory } from "../lib/api";
-import { TIER_LABEL, type TrustTier } from "../data/mock";
+import { getDirectory, type DirectoryEntry } from "../lib/api";
+import { TIER_LABEL } from "../data/mock";
 import { SECTORS, fmtTonnes } from "../lib/carbon";
 
 export const Route = createFileRoute("/directory")({
@@ -28,20 +28,28 @@ export const Route = createFileRoute("/directory")({
   component: Directory,
 });
 
-const TIERS: (TrustTier | "all")[] = ["all", "audited", "api", "self"];
+const TIERS: (string | "all")[] = ["all", "audited", "api", "self"];
 
-function tierTone(tier: TrustTier) {
-  return tier === "audited" ? "text-leaf" : tier === "api" ? "text-teal" : "text-ink-faint";
+function tierTone(tier: string) {
+  return tier === "audited" || tier === "gold"
+    ? "text-leaf"
+    : tier === "api" || tier === "silver"
+      ? "text-teal"
+      : "text-ink-faint";
 }
 
 function Directory() {
-  const { data, isPending } = useQuery({ queryKey: ["directory"], queryFn: getDirectory });
+  const { data: directoryList, isPending, isError } = useQuery<DirectoryEntry[]>({
+    queryKey: ["directory"],
+    queryFn: getDirectory,
+  });
+
   const [q, setQ] = useState("");
   const [sector, setSector] = useState("all");
-  const [tier, setTier] = useState<TrustTier | "all">("all");
+  const [tier, setTier] = useState<string>("all");
 
   const rows = useMemo(() => {
-    const list = data?.data ?? [];
+    const list = directoryList ?? [];
     return list
       .filter((e) => (sector === "all" ? true : e.sector === sector))
       .filter((e) => (tier === "all" ? true : e.tier === tier))
@@ -51,7 +59,7 @@ function Directory() {
           : true,
       )
       .sort((a, b) => b.score - a.score);
-  }, [data, q, sector, tier]);
+  }, [directoryList, q, sector, tier]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,9 +68,8 @@ function Directory() {
         <header className="page-rise">
           <h1 className="font-serif text-3xl tracking-tight text-ink">Green supplier directory</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">
-            Only businesses with a passing data-provenance check are listed. The same index is
-            served headlessly to enterprise procurement systems, so a high score reaches buyers
-            without anyone visiting this page.
+            Only businesses with a registered carbon assessment in the database are listed. The same
+            index is served headlessly to enterprise procurement systems.
           </p>
         </header>
 
@@ -118,7 +125,20 @@ function Directory() {
         </div>
 
         {isPending ? (
-          <p className="mt-10 font-mono text-sm text-ink-faint">Loading directory…</p>
+          <p className="mt-10 font-mono text-sm text-ink-faint">Loading directory from backend…</p>
+        ) : isError ? (
+          <div className="mt-10 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-500 font-mono text-xs flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" /> Unable to fetch directory from API.
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="mt-10 card-surface p-8 text-center">
+            <h3 className="font-serif text-lg text-ink">No suppliers found in directory</h3>
+            <p className="mt-1 text-xs text-ink-muted">
+              {q.trim() || sector !== "all" || tier !== "all"
+                ? "Try clearing search filters."
+                : "No registered suppliers with active assessments found in database yet."}
+            </p>
+          </div>
         ) : (
           <section
             className="page-rise mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3"
@@ -130,7 +150,7 @@ function Directory() {
                   <div>
                     <h2 className="font-serif text-lg leading-tight text-ink">{e.name}</h2>
                     <p className="mt-1 text-xs text-ink-faint">
-                      {e.sectorLabel} · {e.location} · {e.employees} staff
+                      {e.sectorLabel} · {e.location}
                     </p>
                   </div>
                   <span
@@ -145,12 +165,12 @@ function Directory() {
                   className={`mt-4 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.14em] ${tierTone(e.tier)}`}
                 >
                   <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-                  {TIER_LABEL[e.tier]}
+                  {TIER_LABEL[e.tier] || e.tier.toUpperCase()}
                 </p>
                 <p className="mt-2 text-sm text-ink-muted tabular-nums">
-                  {fmtTonnes(e.tonnes)} CO₂e reported annually
+                  {fmtTonnes(e.tonnes)} CO₂e reported
                 </p>
-                {e.verifiedSources.length > 0 && (
+                {e.verifiedSources && e.verifiedSources.length > 0 && (
                   <p className="mt-3 flex flex-wrap gap-1.5">
                     {e.verifiedSources.map((s) => (
                       <span
@@ -171,9 +191,6 @@ function Directory() {
                 </Link>
               </article>
             ))}
-            {rows.length === 0 && (
-              <p className="font-mono text-sm text-ink-faint">No suppliers match those filters.</p>
-            )}
           </section>
         )}
 
@@ -188,11 +205,8 @@ function Directory() {
             Enterprise buyers query the same records inline from their own procurement software.
           </p>
           <pre className="mt-4 overflow-x-auto rounded-xl bg-surface-2 p-4 font-mono text-[12px] leading-relaxed text-ink">
-            {`GET /api/directory?sector=manufacturing&min_score=70
-Authorization: Bearer <procurement_key>
-
-{ "results": [ { "name": "Kiln & Co. Ceramics",
-                 "score": 88, "tier": "audited" } ] }`}
+            {`GET /api/v1/directory
+Authorization: Bearer <token>`}
           </pre>
         </section>
       </main>

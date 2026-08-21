@@ -7,7 +7,6 @@ import {
   Truck,
   Plane,
   CreditCard,
-  Server,
   Play,
   Copy,
   Check,
@@ -16,11 +15,10 @@ import {
   Info,
 } from "lucide-react";
 import {
-  estimateEmissionsWithFallback,
+  estimateEmissions,
   API_BASE,
   type EstimateRequest,
   type EstimateResponse,
-  type Sourced,
 } from "../lib/api";
 
 const PRESETS: {
@@ -117,13 +115,13 @@ export function ClimatiqEstimator() {
   const [paramValue, setParamValue] = useState("1200");
   const [paramUnit, setParamUnit] = useState("kWh");
 
-  const [result, setResult] = useState<Sourced<EstimateResponse> | null>(null);
+  const [result, setResult] = useState<EstimateResponse | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedCurl, setCopiedCurl] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
 
   const estimateMutation = useMutation({
-    mutationFn: (req: EstimateRequest) => estimateEmissionsWithFallback(req),
+    mutationFn: (req: EstimateRequest) => estimateEmissions(req),
     onSuccess: (data) => {
       setErrorMsg(null);
       setResult(data);
@@ -138,129 +136,118 @@ export function ClimatiqEstimator() {
     const params: Record<string, unknown> = {};
 
     if (paramType === "energy") {
-      params.energy = val;
-      params.energy_unit = paramUnit;
+      params["energy"] = val;
+      params["energy_unit"] = paramUnit;
     } else if (paramType === "volume") {
-      params.volume = val;
-      params.volume_unit = paramUnit;
+      params["volume"] = val;
+      params["volume_unit"] = paramUnit;
     } else if (paramType === "distance") {
-      params.distance = val;
-      params.distance_unit = paramUnit;
+      params["distance"] = val;
+      params["distance_unit"] = paramUnit;
     } else if (paramType === "money") {
-      params.money = val;
-      params.money_unit = paramUnit;
+      params["money"] = val;
+      params["money_unit"] = paramUnit;
     } else if (paramType === "weight") {
-      params.weight = val;
-      params.weight_unit = paramUnit;
+      params["weight"] = val;
+      params["weight_unit"] = paramUnit;
     }
 
     return {
-      activity_id: activityId.trim(),
-      data_version: dataVersion.trim() || "^21",
-      region: region.trim() || undefined,
+      activity_id: activityId,
+      data_version: dataVersion,
+      region: region ? region.toUpperCase() : undefined,
       year: year ? Number(year) : undefined,
       parameters: params,
     };
   };
 
-  const handleRun = (e?: FormEvent) => {
+  const handleRunEstimate = (e?: FormEvent) => {
     if (e) e.preventDefault();
-    if (!activityId.trim()) {
-      setErrorMsg("Activity ID is required.");
-      return;
-    }
     const payload = getPayload();
     estimateMutation.mutate(payload);
   };
 
-  const applyPreset = (preset: (typeof PRESETS)[number]) => {
+  const loadPreset = (preset: (typeof PRESETS)[0]) => {
     setActivityId(preset.req.activity_id);
     setDataVersion(preset.req.data_version);
-    setRegion(preset.req.region || "GB");
-    setYear(preset.req.year ? String(preset.req.year) : "2024");
+    setRegion(preset.req.region || "");
+    setYear(String(preset.req.year || 2024));
 
-    const p = preset.req.parameters;
-    if (p.energy !== undefined) {
+    const params = preset.req.parameters;
+    if ("energy" in params) {
       setParamType("energy");
-      setParamValue(String(p.energy));
-      setParamUnit(String(p.energy_unit || "kWh"));
-    } else if (p.volume !== undefined) {
+      setParamValue(String(params["energy"]));
+      setParamUnit(String(params["energy_unit"] || "kWh"));
+    } else if ("volume" in params) {
       setParamType("volume");
-      setParamValue(String(p.volume));
-      setParamUnit(String(p.volume_unit || "l"));
-    } else if (p.distance !== undefined) {
+      setParamValue(String(params["volume"]));
+      setParamUnit(String(params["volume_unit"] || "l"));
+    } else if ("distance" in params) {
       setParamType("distance");
-      setParamValue(String(p.distance));
-      setParamUnit(String(p.distance_unit || "km"));
-    } else if (p.money !== undefined) {
+      setParamValue(String(params["distance"]));
+      setParamUnit(String(params["distance_unit"] || "km"));
+    } else if ("money" in params) {
       setParamType("money");
-      setParamValue(String(p.money));
-      setParamUnit(String(p.money_unit || "usd"));
-    } else if (p.weight !== undefined) {
-      setParamType("weight");
-      setParamValue(String(p.weight));
-      setParamUnit(String(p.weight_unit || "kg"));
+      setParamValue(String(params["money"]));
+      setParamUnit(String(params["money_unit"] || "usd"));
     }
-    setErrorMsg(null);
+
+    estimateMutation.mutate(preset.req);
   };
 
-  const currentPayload = getPayload();
-  const curlCommand = `curl -X POST "${API_BASE}/emissions/estimate" \\
+  const getCurlCommand = () => {
+    const payload = getPayload();
+    return `curl -X POST "${API_BASE}/emissions/estimate" \\
   -H "Content-Type: application/json" \\
-  -d '${JSON.stringify(currentPayload, null, 2)}'`;
+  -d '${JSON.stringify(payload, null, 2)}'`;
+  };
 
   const copyCurl = () => {
-    void navigator.clipboard.writeText(curlCommand);
+    void navigator.clipboard.writeText(getCurlCommand());
     setCopiedCurl(true);
     setTimeout(() => setCopiedCurl(false), 2000);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header & Presets */}
+      {/* Header Banner */}
       <div className="card-surface p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-rule pb-4">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-teal/15 text-teal">
-                <Sparkles className="h-4 w-4" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-teal/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-teal uppercase tracking-wider">
+                <Sparkles className="h-3 w-3" /> Climatiq API Proxy
               </span>
-              <h3 className="font-serif text-xl text-ink">Climatiq Raw Estimate Proxy</h3>
             </div>
-            <p className="mt-1 text-xs text-ink-muted">
-              Direct proxy to Climatiq calculation engine via{" "}
-              <code className="font-mono text-ink">POST /emissions/estimate</code>
+            <h2 className="font-serif text-2xl text-ink">Micro Emission Estimator</h2>
+            <p className="max-w-2xl text-xs text-ink-muted leading-relaxed">
+              Execute live, factor-based emission estimates through the Go backend Climatiq proxy (POST /api/v1/emissions/estimate).
             </p>
           </div>
-          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-teal">
-            OpenAPI Endpoint
-          </span>
         </div>
 
-        {/* Preset Cards */}
-        <div className="mt-4">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
-            Verified Activity Factor Presets
+        {/* Presets Grid */}
+        <div className="mt-6 border-t border-rule pt-4">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-ink-faint mb-3">
+            Quick-start activity presets
           </p>
-          <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {PRESETS.map((p) => {
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {PRESETS.map((p, idx) => {
               const Icon = p.icon;
-              const isActive = activityId === p.req.activity_id;
               return (
                 <button
-                  key={p.title}
-                  type="button"
-                  onClick={() => applyPreset(p)}
-                  className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-all hover:border-leaf/50 hover:bg-surface-2 ${
-                    isActive ? "border-leaf bg-surface-2 shadow-sm" : "border-rule bg-surface"
-                  }`}
+                  key={idx}
+                  onClick={() => loadPreset(p)}
+                  className="flex items-start gap-3 rounded-xl border border-rule bg-surface-2 p-3 text-left transition-all hover:border-leaf/50 hover:bg-surface-3 group"
                 >
-                  <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface-2 text-ink">
-                    <Icon className="h-3.5 w-3.5" />
+                  <span className="mt-0.5 rounded-lg bg-surface p-2 text-ink-muted group-hover:text-leaf transition-colors">
+                    <Icon className="h-4 w-4" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-ink truncate">{p.title}</p>
-                    <p className="mt-0.5 font-mono text-[10px] text-ink-faint">{p.category}</p>
+                    <div className="font-mono text-[10px] text-ink-faint uppercase">{p.category}</div>
+                    <div className="font-sans text-xs font-medium text-ink group-hover:text-leaf transition-colors truncate">
+                      {p.title}
+                    </div>
                   </div>
                 </button>
               );
@@ -269,248 +256,219 @@ export function ClimatiqEstimator() {
         </div>
       </div>
 
-      {/* Interactive Request Form */}
-      <form onSubmit={handleRun} className="card-surface space-y-5 p-6">
-        <h4 className="font-serif text-lg text-ink">Estimate Parameters</h4>
+      {/* Main Interactive Form & Results Split */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Left: Request Form */}
+        <div className="card-surface p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-rule pb-3">
+            <h3 className="font-serif text-lg text-ink">Estimate Request Builder</h3>
+            <span className="font-mono text-[10px] uppercase text-ink-faint">POST /emissions/estimate</span>
+          </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-xs text-ink-muted">
-            Activity ID (Climatiq Factor ID)
-            <input
-              type="text"
-              value={activityId}
-              onChange={(e) => setActivityId(e.target.value)}
-              placeholder="e.g. electricity-supply_grid-source_supplier_mix"
-              required
-              className="mt-1 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
-            />
-          </label>
-
-          <label className="block text-xs text-ink-muted">
-            Data Version
-            <input
-              type="text"
-              value={dataVersion}
-              onChange={(e) => setDataVersion(e.target.value)}
-              placeholder="^21"
-              required
-              className="mt-1 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
-            />
-          </label>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-xs text-ink-muted">
-            Region Code
-            <input
-              type="text"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              placeholder="e.g. GB, US, DE, GLOBAL"
-              className="mt-1 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
-            />
-          </label>
-
-          <label className="block text-xs text-ink-muted">
-            Year (Optional)
-            <input
-              type="number"
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              placeholder="2024"
-              className="mt-1 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
-            />
-          </label>
-        </div>
-
-        {/* Dynamic Parameter Selector */}
-        <div className="rounded-xl border border-rule bg-surface p-4">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
-            Activity Parameters Object
-          </p>
-
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <label className="block text-xs text-ink-muted">
-              Parameter Type
-              <select
-                value={paramType}
-                onChange={(e) => {
-                  const t = e.target.value as typeof paramType;
-                  setParamType(t);
-                  if (t === "energy") setParamUnit("kWh");
-                  if (t === "volume") setParamUnit("l");
-                  if (t === "distance") setParamUnit("km");
-                  if (t === "money") setParamUnit("usd");
-                  if (t === "weight") setParamUnit("kg");
-                }}
-                className="mt-1 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
-              >
-                <option value="energy">energy</option>
-                <option value="volume">volume</option>
-                <option value="distance">distance</option>
-                <option value="money">money</option>
-                <option value="weight">weight</option>
-              </select>
-            </label>
-
-            <label className="block text-xs text-ink-muted">
-              Value
-              <input
-                type="number"
-                step="any"
-                min="0"
-                value={paramValue}
-                onChange={(e) => setParamValue(e.target.value)}
-                placeholder="100"
-                required
-                className="mt-1 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
-              />
-            </label>
-
-            <label className="block text-xs text-ink-muted">
-              Unit
+          <form onSubmit={handleRunEstimate} className="space-y-4">
+            <label className="block space-y-1">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                Activity ID
+              </span>
               <input
                 type="text"
-                value={paramUnit}
-                onChange={(e) => setParamUnit(e.target.value)}
-                placeholder="e.g. kWh, l, km, usd"
-                required
-                className="mt-1 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
+                value={activityId}
+                onChange={(e) => setActivityId(e.target.value)}
+                placeholder="e.g. electricity-supply_grid-source_supplier_mix"
+                className="w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
               />
             </label>
-          </div>
-        </div>
 
-        {errorMsg && (
-          <div className="flex items-start gap-2.5 rounded-xl border border-amber/30 bg-amber/10 p-3 text-xs text-amber">
-            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <button
-            type="submit"
-            disabled={estimateMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-full bg-leaf px-6 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            <Play className="h-3.5 w-3.5 fill-current" />
-            {estimateMutation.isPending ? "Estimating…" : "Run Estimate (POST /emissions/estimate)"}
-          </button>
-
-          <button
-            type="button"
-            onClick={copyCurl}
-            className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted hover:bg-surface-2"
-          >
-            {copiedCurl ? <Check className="h-3 w-3 text-leaf" /> : <Copy className="h-3 w-3" />}
-            {copiedCurl ? "cURL Copied" : "Copy cURL"}
-          </button>
-        </div>
-      </form>
-
-      {/* Estimate Results Card */}
-      {result && (
-        <div className="card-surface space-y-5 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rule pb-4">
-            <div>
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
-                Estimate Output
-              </span>
-              <h4 className="font-serif text-2xl text-ink">Calculation Result</h4>
-            </div>
-            <span
-              className={`rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] ${
-                result.source === "live"
-                  ? "bg-leaf/15 text-leaf border border-leaf/30"
-                  : "bg-amber/15 text-amber border border-amber/30"
-              }`}
-            >
-              {result.source === "live" ? "Climatiq Live API" : "Simulated Local Factor"}
-            </span>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-xl border border-rule bg-surface p-4">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
-                Estimated GHG Emissions
-              </p>
-              <p className="mt-2 font-serif text-3xl text-leaf tabular-nums">
-                {result.data.co2e.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                <span className="ml-1.5 font-sans text-base text-ink-muted">
-                  {result.data.co2e_unit || "kg"} CO₂e
+            <div className="grid grid-cols-3 gap-3">
+              <label className="block space-y-1">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                  Data Version
                 </span>
-              </p>
-              <p className="mt-1 text-[11px] text-ink-faint font-mono">
-                Method: {result.data.calculation_method || "IPCC AR6 / GWP100"}
-              </p>
+                <input
+                  type="text"
+                  value={dataVersion}
+                  onChange={(e) => setDataVersion(e.target.value)}
+                  className="w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                  Region
+                </span>
+                <input
+                  type="text"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  placeholder="GB, US, etc."
+                  className="w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf uppercase"
+                />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
+                  Year
+                </span>
+                <input
+                  type="number"
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  className="w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-leaf"
+                />
+              </label>
             </div>
 
-            {result.data.activity_data && (
-              <div className="rounded-xl border border-rule bg-surface p-4">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
-                  Normalized Activity Data
-                </p>
-                <p className="mt-2 font-serif text-2xl text-ink tabular-nums">
-                  {result.data.activity_data.activity_value?.toLocaleString() ?? paramValue}{" "}
-                  <span className="font-sans text-sm text-ink-muted">
-                    {result.data.activity_data.activity_unit || paramUnit}
-                  </span>
-                </p>
-                <p className="mt-1 text-[11px] text-ink-faint font-mono">
-                  Origin: {result.data.calculation_origin || "Climatiq Engine"}
-                </p>
-              </div>
-            )}
+            {/* Parameter Input */}
+            <div className="rounded-xl border border-rule bg-surface-2 p-4 space-y-3">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint block">
+                Activity Parameter
+              </span>
 
-            {result.data.emission_factor && (
-              <div className="rounded-xl border border-rule bg-surface p-4 sm:col-span-2 lg:col-span-1">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
-                  Emission Factor Dataset
-                </p>
-                <p className="mt-1.5 text-xs font-medium text-ink truncate">
-                  {result.data.emission_factor.name || activityId}
-                </p>
-                <p className="mt-0.5 text-[11px] text-ink-faint truncate">
-                  {result.data.emission_factor.source_dataset || "Government Standard Factors"} (
-                  {result.data.emission_factor.region || region},{" "}
-                  {result.data.emission_factor.year || year})
-                </p>
-              </div>
-            )}
-          </div>
+              <div className="grid grid-cols-3 gap-2">
+                <select
+                  value={paramType}
+                  onChange={(e) => setParamType(e.target.value as any)}
+                  className="rounded-lg border border-rule bg-surface px-2 py-1.5 font-mono text-xs text-ink outline-none"
+                >
+                  <option value="energy">Energy</option>
+                  <option value="volume">Volume</option>
+                  <option value="distance">Distance</option>
+                  <option value="money">Spend (Money)</option>
+                  <option value="weight">Weight</option>
+                </select>
 
-          {/* Quality flags & Notices */}
-          {result.data.notices && result.data.notices.length > 0 && (
-            <div className="rounded-xl border border-rule bg-surface p-4 space-y-2">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint flex items-center gap-1.5">
-                <Info className="h-3.5 w-3.5 text-teal" /> Calculation Notices
-              </p>
-              {result.data.notices.map((n, i) => (
-                <p key={i} className="text-xs text-ink-muted">
-                  <span className="font-mono text-ink-faint">[{n.code || "NOTICE"}]:</span>{" "}
-                  {n.message}
-                </p>
-              ))}
+                <input
+                  type="number"
+                  value={paramValue}
+                  onChange={(e) => setParamValue(e.target.value)}
+                  className="rounded-lg border border-rule bg-surface px-3 py-1.5 font-mono text-xs text-ink outline-none"
+                />
+
+                <input
+                  type="text"
+                  value={paramUnit}
+                  onChange={(e) => setParamUnit(e.target.value)}
+                  placeholder="Unit (kWh, l, km...)"
+                  className="rounded-lg border border-rule bg-surface px-3 py-1.5 font-mono text-xs text-ink outline-none"
+                />
+              </div>
             </div>
-          )}
 
-          {/* Raw JSON viewer */}
-          <div className="border-t border-rule pt-4">
             <button
-              onClick={() => setShowRawJson(!showRawJson)}
-              className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint hover:text-ink"
+              type="submit"
+              disabled={estimateMutation.isPending}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-leaf py-2.5 font-mono text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {showRawJson ? "Hide Raw Response JSON ▲" : "View Raw Response JSON ▼"}
+              <Play className="h-3.5 w-3.5 fill-current" />
+              {estimateMutation.isPending ? "Calculating estimate..." : "Execute Estimate Call"}
             </button>
-            {showRawJson && (
-              <pre className="mt-3 max-h-64 overflow-auto rounded-xl bg-surface-2 p-4 font-mono text-[11px] text-ink leading-relaxed">
-                {JSON.stringify(result.data, null, 2)}
+          </form>
+
+          {/* cURL Code Block */}
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between text-xs text-ink-muted">
+              <span className="font-mono text-[10px] uppercase text-ink-faint">cURL Equivalent</span>
+              <button
+                onClick={copyCurl}
+                className="flex items-center gap-1 font-mono text-[10px] text-ink-faint hover:text-ink transition-colors"
+              >
+                {copiedCurl ? <Check className="h-3 w-3 text-leaf" /> : <Copy className="h-3 w-3" />}
+                {copiedCurl ? "Copied" : "Copy cURL"}
+              </button>
+            </div>
+            <pre className="overflow-x-auto rounded-lg bg-surface-3 p-3 font-mono text-[11px] text-ink-muted leading-relaxed">
+              {getCurlCommand()}
+            </pre>
+          </div>
+        </div>
+
+        {/* Right: Response Output */}
+        <div className="card-surface p-6 flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center justify-between border-b border-rule pb-3">
+              <h3 className="font-serif text-lg text-ink">Estimate Result</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowRawJson(!showRawJson)}
+                  className="flex items-center gap-1 font-mono text-[10px] uppercase text-ink-faint hover:text-ink transition-colors"
+                >
+                  <FileCode className="h-3 w-3" />
+                  {showRawJson ? "Visual view" : "Raw JSON"}
+                </button>
+              </div>
+            </div>
+
+            {errorMsg && (
+              <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-500">
+                <div className="flex items-center gap-2 font-mono text-xs font-semibold">
+                  <AlertCircle className="h-4 w-4" /> Estimate Calculation Error
+                </div>
+                <p className="mt-1 font-mono text-xs">{errorMsg}</p>
+              </div>
+            )}
+
+            {!result && !errorMsg && (
+              <div className="py-16 text-center text-ink-faint font-mono text-xs">
+                Select an activity preset or click &quot;Execute Estimate Call&quot; to calculate emissions.
+              </div>
+            )}
+
+            {result && showRawJson && (
+              <pre className="mt-4 max-h-[420px] overflow-auto rounded-xl bg-surface-3 p-4 font-mono text-xs text-ink leading-relaxed">
+                {JSON.stringify(result, null, 2)}
               </pre>
             )}
+
+            {result && !showRawJson && (
+              <div className="mt-4 space-y-6">
+                {/* Highlight Big Number */}
+                <div className="rounded-xl border border-leaf/30 bg-leaf/10 p-5 text-center">
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-leaf font-semibold">
+                    Calculated Carbon Footprint
+                  </span>
+                  <div className="mt-2 font-serif text-4xl font-bold text-ink tabular-nums">
+                    {result.co2e.toLocaleString(undefined, { maximumFractionDigits: 3 })}
+                    <span className="ml-2 font-sans text-xl text-leaf">{result.co2e_unit}</span>
+                  </div>
+                  <div className="mt-1 font-mono text-xs text-ink-muted">
+                    Equivalent to {(result.co2e / 1000).toFixed(3)} tonnes CO₂e
+                  </div>
+                </div>
+
+                {/* Factor Details */}
+                {result.emission_factor && (
+                  <div className="rounded-xl border border-rule bg-surface-2 p-4 space-y-2">
+                    <span className="font-mono text-[10px] uppercase text-ink-faint block">
+                      Emission Factor Metadata
+                    </span>
+                    <div className="font-sans text-sm font-semibold text-ink">
+                      {result.emission_factor.name}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-rule font-mono text-xs text-ink-muted">
+                      <div>Source: {result.emission_factor.source || "Climatiq"}</div>
+                      <div>Region: {result.emission_factor.region || "Global"}</div>
+                      <div>Year: {result.emission_factor.year || "2024"}</div>
+                      <div>ID: {result.emission_factor.activity_id}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Calculation Details */}
+                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                  <div className="rounded-lg bg-surface-2 p-3">
+                    <span className="text-ink-faint block">Method</span>
+                    <span className="text-ink font-medium">{result.calculation_method || "climatiq_api"}</span>
+                  </div>
+                  <div className="rounded-lg bg-surface-2 p-3">
+                    <span className="text-ink-faint block">Origin</span>
+                    <span className="text-ink font-medium">{result.calculation_origin || "backend_proxy"}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

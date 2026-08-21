@@ -4,12 +4,6 @@ import { BackendStatus } from "./BackendStatus";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "../lib/auth";
 
-const links = [
-  { to: "/", label: "Home" },
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/directory", label: "Directory" },
-] as const;
-
 export function SiteNav() {
   const { account, ready, signOut } = useAuth();
   const navigate = useNavigate();
@@ -19,6 +13,16 @@ export function SiteNav() {
     navigate({ to: "/" });
   };
 
+  const navLinks = account
+    ? [
+        { to: "/dashboard", label: "Dashboard" },
+        { to: "/directory", label: "Directory" },
+      ]
+    : [
+        { to: "/", label: "Home" },
+        { to: "/directory", label: "Directory" },
+      ];
+
   return (
     <header className="sticky top-0 z-30 border-b border-rule bg-background/85 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3">
@@ -26,11 +30,11 @@ export function SiteNav() {
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-leaf text-primary-foreground">
             <Leaf className="h-4 w-4" strokeWidth={2.4} aria-hidden />
           </span>
-          <span className="font-serif text-lg tracking-tight">Verdant</span>
+          <span className="font-serif text-lg tracking-tight">C-Step</span>
         </Link>
 
         <nav className="flex items-center gap-5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
-          {links.map((l) => (
+          {navLinks.map((l) => (
             <Link
               key={l.to}
               to={l.to}
@@ -48,12 +52,17 @@ export function SiteNav() {
         <div className="ml-auto flex items-center gap-2.5">
           {ready &&
             (account ? (
-              <button
-                onClick={handleSignOut}
-                className="rounded-full border border-rule px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted transition-colors hover:text-ink cursor-pointer"
-              >
-                Sign out
-              </button>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs text-leaf font-semibold">
+                  {account.name || account.email}
+                </span>
+                <button
+                  onClick={handleSignOut}
+                  className="rounded-full border border-rule px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted transition-colors hover:text-ink cursor-pointer"
+                >
+                  Sign out
+                </button>
+              </div>
             ) : (
               <>
                 <Link

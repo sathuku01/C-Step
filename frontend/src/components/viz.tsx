@@ -1,4 +1,9 @@
-import type { MonthPoint } from "../data/mock";
+export interface MonthPoint {
+  month: string;
+  scope1: number;
+  scope2: number;
+  scope3: number;
+}
 
 export function ScoreRing({ score, size = 132 }: { score: number; size?: number }) {
   const r = size / 2 - 9;

@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Copy, Share2, ShieldCheck } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
-import { getDirectory } from "../lib/api";
+import { getDirectory, type DirectoryEntry } from "../lib/api";
 import { TIER_LABEL } from "../data/mock";
 import { fmtTonnes } from "../lib/carbon";
 
@@ -31,7 +31,10 @@ export const Route = createFileRoute("/profile/$supplierId")({
 
 function SupplierProfile() {
   const { supplierId } = Route.useParams();
-  const { data, isPending } = useQuery({ queryKey: ["directory"], queryFn: getDirectory });
+  const { data: directoryList, isPending } = useQuery<DirectoryEntry[]>({
+    queryKey: ["directory"],
+    queryFn: getDirectory,
+  });
   const [copied, setCopied] = useState(false);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const canCopy =
@@ -39,8 +42,8 @@ function SupplierProfile() {
     navigator.clipboard &&
     typeof navigator.clipboard.writeText === "function";
   const entry = useMemo(
-    () => (data?.data ?? []).find((item) => item.id === supplierId),
-    [data, supplierId],
+    () => (directoryList ?? []).find((item) => item.id === supplierId),
+    [directoryList, supplierId],
   );
 
   async function handleShare() {
@@ -90,7 +93,7 @@ function SupplierProfile() {
                 </p>
                 <h1 className="mt-2 font-serif text-3xl tracking-tight text-ink">{entry.name}</h1>
                 <p className="mt-1 text-sm text-ink-muted">
-                  {entry.sectorLabel} · {entry.location} · {entry.employees} staff
+                  {entry.sectorLabel} · {entry.location}
                 </p>
               </div>
               <button
@@ -128,7 +131,7 @@ function SupplierProfile() {
                   <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
                     Trust badge
                   </p>
-                  <p className="text-sm text-ink">{TIER_LABEL[entry.tier]}</p>
+                  <p className="text-sm text-ink">{TIER_LABEL[entry.tier] || entry.tier.toUpperCase()}</p>
                 </div>
               </article>
             </section>
@@ -138,7 +141,7 @@ function SupplierProfile() {
               style={{ "--rise-delay": "0.16s" } as CSSProperties}
             >
               <h2 className="font-serif text-xl text-ink">Verified data sources</h2>
-              {entry.verifiedSources.length > 0 ? (
+              {entry.verifiedSources && entry.verifiedSources.length > 0 ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                   {entry.verifiedSources.map((source) => (
                     <span
