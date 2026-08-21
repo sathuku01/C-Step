@@ -3,6 +3,7 @@ package assessment
 import (
 	"c-step/internal/badge"
 	"c-step/internal/emissions/climatiq"
+	"c-step/internal/verification"
 	"context"
 	"fmt"
 	"github.com/google/uuid"
@@ -14,20 +15,23 @@ const (
 )
 
 type Service struct {
-	climatiq *climatiq.Client
-	badge    *badge.Service
-	repo     Repository
+	climatiq     *climatiq.Client
+	badge        *badge.Service
+	verification *verification.Service
+	repo         Repository
 }
 
 func NewService(
 	client *climatiq.Client,
 	badgeService *badge.Service,
+	verificationService *verification.Service,
 	repo Repository,
 ) *Service {
 	return &Service{
-		climatiq: client,
-		badge:    badgeService,
-		repo:     repo,
+		climatiq:     client,
+		badge:        badgeService,
+		verification: verificationService,
+		repo:         repo,
 	}
 }
 
@@ -53,9 +57,7 @@ func (s *Service) Calculate(
 	input CreateAssessmentRequest,
 ) (*AssessmentResult, error) {
 
-	result := &AssessmentResult{}
-
-	result.UserID = userID
+	result := &AssessmentResult{UserID: userID}
 
 	// --------------------------------
 	// ELECTRICITY
@@ -224,6 +226,12 @@ func (s *Service) Calculate(
 
 	result.ID = uuid.NewString()
 
+	if verificationResult, ok, err := s.verify(result); err != nil {
+		return nil, fmt.Errorf("verify assessment: %w", err)
+	} else if ok {
+		result.Verification = verificationResult
+	}
+
 	if err := s.repo.Create(ctx, result); err != nil {
 		return nil, fmt.Errorf("save assessment: %w", err)
 	}
@@ -231,15 +239,81 @@ func (s *Service) Calculate(
 	return result, nil
 }
 
+// verify aggregates the confidence behind each of result's breakdown items
+// and, for reports trustworthy enough, hashes the report content. It
+// returns ok=false (with no error) when there's nothing to verify at all --
+// e.g. an assessment with an empty breakdown -- since that isn't a failure,
+// just a report with no verifiable content.
+func (s *Service) verify(result *AssessmentResult) (*VerificationResult, bool, error) {
+	if len(result.Breakdown) == 0 {
+		return nil, false, nil
+	}
 
+	confidences := make([]verification.Level, 0, len(result.Breakdown))
+	for _, item := range result.Breakdown {
+		confidences = append(confidences, verification.ParseLevel(item.Confidence))
+	}
 
-func (s *Service) List(
-	ctx context.Context,
-	userID string,
-) ([]*AssessmentResult, error) {
-	return s.repo.List(ctx, userID)
+	report := verifiableReport{
+		ID:          result.ID,
+		TotalCO2eKg: result.TotalCO2eKg,
+		Breakdown:   result.Breakdown,
+		Badge:       result.Badge,
+	}
+
+	record, err := s.verification.Verify(confidences, report)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return &VerificationResult{
+		Level:      string(record.Level),
+		Verifiable: record.Verifiable,
+		ReportHash: record.ReportHash,
+		HashedAt:   record.HashedAt,
+	}, true, nil
 }
 
+// Verify re-checks a stored assessment's integrity: it recomputes the
+// report hash from the assessment's current stored data and reports
+// whether it still matches the hash that was originally computed. A
+// mismatch means the stored record was altered after it was verified.
+func (s *Service) Verify(ctx context.Context, id string, userID string) (*VerificationCheck, error) {
+	result, err := s.repo.GetByID(ctx, id, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	verificationResult, ok, err := s.verify(result)
+	if err != nil {
+		return nil, fmt.Errorf("recompute verification: %w", err)
+	}
+
+	check := &VerificationCheck{
+		AssessmentID: result.ID,
+		Match:        true,
+	}
+
+	if !ok {
+		return check, nil
+	}
+
+	check.Level = verificationResult.Level
+	check.Verifiable = verificationResult.Verifiable
+	check.RecomputedHash = verificationResult.ReportHash
+
+	if result.Verification != nil {
+		check.StoredHash = result.Verification.ReportHash
+	}
+
+	check.Match = check.StoredHash == check.RecomputedHash
+
+	return check, nil
+}
+
+func (s *Service) List(ctx context.Context, userID string) ([]*AssessmentResult, error) {
+	return s.repo.List(ctx, userID)
+}
 
 func (s *Service) Get(
 	ctx context.Context,

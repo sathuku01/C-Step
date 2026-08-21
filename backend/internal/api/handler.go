@@ -106,6 +106,36 @@ func (h *AssessmentHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+func (h *AssessmentHandler) Verify(c *gin.Context) {
+	userID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+	id := c.Param("id")
+
+	check, err := h.service.Verify(
+		c.Request.Context(),
+		id,
+		userID,
+	)
+
+	if err != nil {
+		if errors.Is(err, assessment.ErrAssessmentNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "assessment not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, check)
+}
+
 func (h *AssessmentHandler) Dashboard(c *gin.Context) {
 	userID, ok := getUserID(c)
 	if !ok {
