@@ -259,7 +259,6 @@ Key test suites:
 | OCR bill scanning | 🔜 Planned |
 | AI recommendation engine | 🔜 Planned |
 | IoT / real-time data streams | 🔜 Planned |
-| Smart contract escrow financing | 🔜 Planned |
 
 ---
 
@@ -268,5 +267,3 @@ Key test suites:
 MIT — see [LICENSE](LICENSE) for details.
 
 ---
-
-*Built with ❤️ for the Zone01 Kisumu GreenTech Hackathon 2026.*
