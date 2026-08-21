@@ -16,12 +16,13 @@ func NewSQLiteRepository(db *sql.DB) (*SQLiteRepository, error) {
 	repo := &SQLiteRepository{db: db}
 
 	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS assessments (
-			id TEXT PRIMARY KEY,
-			total_co2e_kg REAL NOT NULL,
-			data TEXT NOT NULL
-		)
-	`)
+	CREATE TABLE IF NOT EXISTS assessments (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		total_co2e_kg REAL NOT NULL,
+		data TEXT NOT NULL
+	)
+`)
 	if err != nil {
 		return nil, fmt.Errorf("create assessments table: %w", err)
 	}
@@ -40,9 +41,10 @@ func (r *SQLiteRepository) Create(
 
 	_, err = r.db.ExecContext(
 		ctx,
-		`INSERT INTO assessments (id, total_co2e_kg, data)
-		 VALUES (?, ?, ?)`,
+		`INSERT INTO assessments (id, user_id, total_co2e_kg, data)
+	 VALUES (?, ?, ?, ?)`,
 		assessment.ID,
+		assessment.UserID,
 		assessment.TotalCO2eKg,
 		data,
 	)
@@ -56,13 +58,15 @@ func (r *SQLiteRepository) Create(
 func (r *SQLiteRepository) GetByID(
 	ctx context.Context,
 	id string,
+	userID string,
 ) (*AssessmentResult, error) {
 	var data string
 
 	err := r.db.QueryRowContext(
 		ctx,
-		`SELECT data FROM assessments WHERE id = ?`,
+		`SELECT data FROM assessments WHERE id = ? AND user_id = ?`,
 		id,
+		userID,
 	).Scan(&data)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -84,10 +88,14 @@ func (r *SQLiteRepository) GetByID(
 
 func (r *SQLiteRepository) List(
 	ctx context.Context,
+	userID string,
 ) ([]*AssessmentResult, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT data FROM assessments ORDER BY rowid DESC`,
+		`SELECT data FROM assessments
+ WHERE user_id = ?
+ ORDER BY rowid DESC`,
+		userID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list assessments: %w", err)
