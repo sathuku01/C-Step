@@ -32,8 +32,14 @@ func (h *AssessmentHandler) Calculate(c *gin.Context) {
 		return
 	}
 
+	userID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
 	result, err := h.service.Calculate(
 		c.Request.Context(),
+		userID,
 		input,
 	)
 
@@ -48,7 +54,17 @@ func (h *AssessmentHandler) Calculate(c *gin.Context) {
 }
 
 func (h *AssessmentHandler) List(c *gin.Context) {
-	results, err := h.service.List(c.Request.Context())
+
+	userID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
+	results, err := h.service.List(
+		c.Request.Context(),
+		userID,
+	)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
@@ -60,11 +76,17 @@ func (h *AssessmentHandler) List(c *gin.Context) {
 }
 
 func (h *AssessmentHandler) Get(c *gin.Context) {
+
+	userID, ok := getUserID(c)
+	if !ok {
+		return
+	}
 	id := c.Param("id")
 
 	result, err := h.service.Get(
 		c.Request.Context(),
 		id,
+		userID,
 	)
 
 	if err != nil {
@@ -84,9 +106,16 @@ func (h *AssessmentHandler) Get(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-
 func (h *AssessmentHandler) Dashboard(c *gin.Context) {
-	results, err := h.service.List(c.Request.Context())
+	userID, ok := getUserID(c)
+	if !ok {
+		return
+	}
+
+	results, err := h.service.List(
+		c.Request.Context(),
+		userID,
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
@@ -106,8 +135,27 @@ func (h *AssessmentHandler) Dashboard(c *gin.Context) {
 	}
 
 	if len(results) > 0 {
-		response["latest_assessment"] = results[len(results)-1]
+		response["latest_assessment"] = results[0]
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+func getUserID(c *gin.Context) (string, bool) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "missing authenticated user",
+		})
+		return "", false
+	}
+
+	id, ok := userID.(string)
+	if !ok || id == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid authenticated user",
+		})
+		return "", false
+	}
+
+	return id, true
 }
