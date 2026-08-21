@@ -123,18 +123,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback<AuthValue["signUp"]>(
-    async ({ email, password, name, company }) => {
-      if (!name.trim()) throw new Error("Tell us your name.");
-      if (!company.trim()) throw new Error("Add your company name.");
-      if (!email.includes("@")) throw new Error("Enter a valid work email.");
-      if (password.length < 6) throw new Error("Password must be at least 6 characters.");
-      const live = await tryBackend("/auth/signup", { email, password, name, company });
-      const next = live ?? demoAccount(email, name, company);
-      persist(next);
-      return next;
-    },
-    [persist],
-  );
+  async ({ email, password, name, company }) => {
+    if (!name.trim()) {
+      throw new Error("Tell us your name.");
+    }
+
+    if (!company.trim()) {
+      throw new Error("Add your company name.");
+    }
+
+    if (!email.includes("@")) {
+      throw new Error("Enter a valid work email.");
+    }
+
+    if (password.length < 6) {
+      throw new Error(
+        "Password must be at least 6 characters.",
+      );
+    }
+
+    const response = await signup(
+      email.trim(),
+      password,
+    );
+
+    window.localStorage.setItem(
+      TOKEN_KEY,
+      response.token,
+    );
+
+    const account: Account = {
+      id: response.user.id,
+      email: response.user.email,
+      name: name.trim(),
+      company: company.trim(),
+    };
+
+    persist(account);
+
+    return account;
+  },
+  [persist],
+);
 
   const signOut = useCallback(() => persist(null), [persist]);
 
