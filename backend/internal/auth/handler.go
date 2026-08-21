@@ -61,8 +61,23 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, user)
+	token, err := h.service.CreateToken(
+		user,
+		os.Getenv("JWT_SECRET"),
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "could not create token",
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"user":  user,
+		"token": token,
+	})
 }
+
 
 func (h *Handler) Login(c *gin.Context) {
 	var input authRequest
@@ -107,7 +122,6 @@ func (h *Handler) Login(c *gin.Context) {
 		"token": token,
 	})
 
-	c.JSON(http.StatusOK, user)
 }
 
 
