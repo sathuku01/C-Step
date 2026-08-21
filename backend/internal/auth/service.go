@@ -16,7 +16,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidEmail       = errors.New("invalid email")
-	ErrInvalidPassword    = errors.New("password must be at least 8 characters")
+	ErrInvalidPassword    = errors.New("password must be at least 6 characters")
 )
 
 type Service struct {
@@ -33,15 +33,27 @@ func (s *Service) Register(
 	ctx context.Context,
 	email string,
 	password string,
+	name string,
+	company string,
 ) (*User, error) {
 
 	email = strings.ToLower(strings.TrimSpace(email))
+	name = strings.TrimSpace(name)
+	company = strings.TrimSpace(company)
 
 	if email == "" {
 		return nil, ErrInvalidEmail
 	}
 
-	if len(password) < 8 {
+	if name == "" {
+		return nil, errors.New("name is required")
+	}
+
+	if company == "" {
+		return nil, errors.New("company is required")
+	}
+
+	if len(password) < 6 {
 		return nil, ErrInvalidPassword
 	}
 
@@ -66,6 +78,8 @@ func (s *Service) Register(
 	user := &User{
 		ID:       uuid.NewString(),
 		Email:    email,
+		Name:     name,
+		Company:  company,
 		Password: string(hash),
 	}
 
@@ -114,6 +128,8 @@ func (s *Service) CreateToken(user *User, secret string) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":   user.ID,
 		"email": user.Email,
+		"name":  user.Name,
+		"company": user.Company,
 		"exp":   time.Now().Add(24 * time.Hour).Unix(),
 	}
 
