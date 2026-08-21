@@ -83,3 +83,31 @@ func (h *AssessmentHandler) Get(c *gin.Context) {
 
 	c.JSON(http.StatusOK, result)
 }
+
+
+func (h *AssessmentHandler) Dashboard(c *gin.Context) {
+	results, err := h.service.List(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	var totalCO2e float64
+
+	for _, assessment := range results {
+		totalCO2e += assessment.TotalCO2eKg
+	}
+
+	response := gin.H{
+		"total_assessments": len(results),
+		"total_co2e_kg":     totalCO2e,
+	}
+
+	if len(results) > 0 {
+		response["latest_assessment"] = results[len(results)-1]
+	}
+
+	c.JSON(http.StatusOK, response)
+}
