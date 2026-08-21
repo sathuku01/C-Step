@@ -21,12 +21,6 @@ import (
 	"net/http"
 
 	_ "modernc.org/sqlite"
-
-	"c-step/internal/api"
-	"c-step/internal/assessment"
-	"c-step/internal/auth"
-	"c-step/internal/emissions/climatiq"
-	"c-step/internal/verification"
 )
 
 func main() {
