@@ -36,11 +36,15 @@ func main() {
 	})
 
 	badgeService := badge.NewService(baselineStore)
+	
+
 	assessmentRepo := assessment.NewMemoryRepository()
-	assessmentService := assessment.NewService(
-		climatiqClient,
-		badgeService,
-	)
+
+assessmentService := assessment.NewService(
+    climatiqClient,
+    badgeService,
+    assessmentRepo,
+)
 
 	assessmentHandler := api.NewAssessmentHandler(assessmentService)
 
