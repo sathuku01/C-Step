@@ -49,10 +49,13 @@ func confidenceFromEvidence(evidence string) string {
 
 func (s *Service) Calculate(
 	ctx context.Context,
+	userID string,
 	input CreateAssessmentRequest,
 ) (*AssessmentResult, error) {
 
 	result := &AssessmentResult{}
+
+	result.UserID = userID
 
 	// --------------------------------
 	// ELECTRICITY
@@ -230,14 +233,18 @@ func (s *Service) Calculate(
 
 
 
-
-func (s *Service) List(ctx context.Context) ([]*AssessmentResult, error) {
-	return s.repo.List(ctx)
+func (s *Service) List(
+	ctx context.Context,
+	userID string,
+) ([]*AssessmentResult, error) {
+	return s.repo.List(ctx, userID)
 }
+
 
 func (s *Service) Get(
 	ctx context.Context,
 	id string,
+	userID string,
 ) (*AssessmentResult, error) {
-	return s.repo.GetByID(ctx, id)
+	return s.repo.GetByID(ctx, id, userID)
 }
