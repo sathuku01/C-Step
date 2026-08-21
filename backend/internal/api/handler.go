@@ -170,6 +170,18 @@ func (h *AssessmentHandler) Dashboard(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *AssessmentHandler) Directory(c *gin.Context) {
+	entries, err := h.service.GetDirectory(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, entries)
+}
+
 func getUserID(c *gin.Context) (string, bool) {
 	userID, exists := c.Get("user_id")
 	if !exists {
