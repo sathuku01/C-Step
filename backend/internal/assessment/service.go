@@ -227,3 +227,17 @@ func (s *Service) Calculate(
 
 	return result, nil
 }
+
+
+
+
+func (s *Service) List(ctx context.Context) ([]*AssessmentResult, error) {
+	return s.repo.List(ctx)
+}
+
+func (s *Service) Get(
+	ctx context.Context,
+	id string,
+) (*AssessmentResult, error) {
+	return s.repo.GetByID(ctx, id)
+}
