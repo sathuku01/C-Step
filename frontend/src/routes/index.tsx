@@ -1,7 +1,15 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Building2, Gauge, PlugZap, ShieldCheck, Sparkles } from "lucide-react";
-import { SiteNav } from "../components/SiteNav";
+import {
+  ArrowRight,
+  Award,
+  CheckCircle,
+  FileCheck,
+  FileSpreadsheet,
+  Link2,
+  Search,
+  Sparkles,
+} from "lucide-react";import { SiteNav } from "../components/SiteNav";
 import { postEstimate, type EstimateResponse } from "../lib/api";
 import { SECTORS, fmtTonnes, type SectorKey } from "../lib/carbon";
 
@@ -27,26 +35,60 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
-const STEPS = [
+const PIPELINE_STEPS = [
   {
-    icon: Gauge,
-    title: "Estimate in 30 seconds",
-    body: "Three inputs give you a sector-calibrated baseline and a peer comparison — before you make an account.",
+    step: "01",
+    label: "Carbon Assessment",
+    desc: "Calculate scope 1-3 footprint with Climatiq emission factors.",
+    icon: FileSpreadsheet,
+    color: "text-leaf bg-leaf/10 dark:bg-leaf/25",
   },
   {
-    icon: PlugZap,
-    title: "Connect, don't type",
-    body: "Link accounting, bank and utility feeds. Ledger lines map to emission factors automatically; drop PDFs for OCR.",
+    step: "02",
+    label: "Evidence Upload",
+    desc: "Attach bills and invoices directly to baseline entries.",
+    icon: FileCheck,
+    color: "text-lime bg-lime/10 dark:bg-lime/25",
   },
   {
-    icon: ShieldCheck,
-    title: "Verified, not claimed",
-    body: "Trust tiers and anomaly detection keep self-reported guesses out of the public directory.",
+    step: "03",
+    label: "Verification Status",
+    desc: "System and auditor review confirms data integrity.",
+    icon: CheckCircle,
+    color: "text-teal bg-teal/10 dark:bg-teal/25",
   },
   {
-    icon: Building2,
-    title: "Get found by buyers",
-    body: "Your verified score is exposed through the directory and a procurement API that enterprises query directly.",
+    step: "04",
+    label: "Blockchain Anchor",
+    desc: "Anchor immutable hashes to public testnet registries.",
+    icon: Link2,
+    color: "text-sky bg-sky/10 dark:bg-sky/25",
+  },
+  {
+    step: "05",
+    label: "Supplier ESG Profile",
+    desc: "Earn Gold, Silver, or Bronze trust badges for procurement.",
+    icon: Award,
+    color: "text-amber bg-amber/10 dark:bg-amber/25",
+  },
+];
+
+const VALUE_PROPS = [
+  {
+    title: "Measure Carbon",
+    body: "Identify key emission clusters from utilities, fleet fuels, and logistics.",
+  },
+  {
+    title: "Verify Instantly",
+    body: "Submit document trail to upgrade your data confidence levels.",
+  },
+  {
+    title: "Immutable Anchor",
+    body: "Verify ledger integrity using cryptographic blockchain fingerprints.",
+  },
+  {
+    title: "Discoverable Profile",
+    body: "Get listed in our verified corporate marketplace to attract buyers.",
   },
 ];
 
@@ -73,149 +115,181 @@ function Landing() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground font-sans">
       <SiteNav />
 
       <main className="mx-auto max-w-6xl px-6 pb-24">
-        <section className="grid gap-10 pt-14 lg:grid-cols-[1.05fr_1fr] lg:items-start">
+        {/* Hero Section */}
+        <section className="grid gap-12 pt-16 lg:grid-cols-[1.1fr_1fr] lg:items-center">
           <div className="page-rise" style={{ "--rise-delay": "0s" } as CSSProperties}>
-            <span className="inline-flex items-center gap-2 rounded-full bg-surface-2 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-muted">
-              <Sparkles className="h-3.5 w-3.5 text-leaf" aria-hidden /> For small &amp; medium
-              enterprises
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-semibold font-mono uppercase tracking-[0.14em] text-primary">
+              <Sparkles className="h-3 w-3" /> ESG Supplier Credentials
             </span>
-            <h1 className="mt-5 font-serif text-5xl leading-[1.05] tracking-tight text-ink sm:text-6xl">
-              Know your carbon.
-              <br />
-              <span className="text-leaf">Win the contract.</span>
+            <h1 className="mt-6 font-serif text-5xl font-normal leading-[1.1] tracking-tight text-ink sm:text-6xl">
+              Turn SME sustainability data into{" "}
+              <span className="text-primary italic font-medium">trusted credentials</span>.
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-ink-muted">
-              C-Step turns the data you already have — your ledger, your bank feed, your utility
-              bills — into an audited emissions baseline, a live sustainability score, and a profile
-              enterprise buyers can actually trust.
+            <p className="mt-6 max-w-xl text-base leading-relaxed text-ink-muted">
+              C-Step bridges the gap between ambitious SMEs and corporate procurement policies, turning simple utility ledgers into independently verified, blockchain-anchored ESG ratings.
             </p>
-            <div className="mt-7 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-wrap gap-4">
               <Link
                 to="/dashboard"
-                className="glow-leaf inline-flex items-center gap-2 rounded-full bg-leaf px-5 py-2.5 text-sm font-medium text-primary-foreground transition-transform hover:-translate-y-0.5"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/95 hover:translate-y-[-1px]"
               >
-                Open the dashboard <ArrowRight className="h-4 w-4" aria-hidden />
+                Access Dashboard <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 to="/directory"
-                className="inline-flex items-center gap-2 rounded-full border border-rule px-5 py-2.5 text-sm text-ink transition-colors hover:bg-surface-2"
+                className="inline-flex items-center gap-2 rounded-lg border border-rule bg-surface px-6 py-3 text-sm font-semibold text-ink transition-all hover:bg-surface-2 hover:translate-y-[-1px]"
               >
-                Browse the green directory
+                <Search className="h-4 w-4 text-ink-muted" /> Explore ESG Directory
               </Link>
             </div>
           </div>
 
-          {/* Micro-calculator — value before signup */}
+          {/* Micro-calculator */}
           <form
             onSubmit={onSubmit}
-            className="card-surface page-rise p-6"
-            style={{ "--rise-delay": "0.12s" } as CSSProperties}
+            className="rounded-2xl border border-rule bg-surface p-6 shadow-sm max-w-md w-full justify-self-center lg:justify-self-end page-rise transition-all hover:shadow-md"
+            style={{ "--rise-delay": "0.08s" } as CSSProperties}
           >
-            <h2 className="font-serif text-xl text-ink">Micro-calculator</h2>
-            <p className="mt-1 text-sm text-ink-muted">Three inputs. Powered by Climatiq API.</p>
+            <div>
+              <h2 className="font-serif text-xl text-ink">Emissions Estimator</h2>
+              <p className="mt-1 text-xs text-ink-muted">
+                Run an instant lookup on the Climatiq calculation engine.
+              </p>
+            </div>
 
-            <label className="mt-5 block font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
-              Sector
-              <select
-                value={sector}
-                onChange={(e) => setSector(e.target.value as SectorKey)}
-                className="mt-2 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2.5 font-sans text-sm normal-case tracking-normal text-ink outline-none focus:ring-2 focus:ring-leaf"
-              >
-                {SECTORS.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="mt-6 space-y-4">
+              <label className="block font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                Industry Sector
+                <select
+                  value={sector}
+                  onChange={(e) => setSector(e.target.value as SectorKey)}
+                  className="mt-1.5 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2.5 font-sans text-sm text-ink outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                >
+                  {SECTORS.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <label className="block font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
-                Employees
-                <input
-                  type="number"
-                  min={1}
-                  value={employees}
-                  onChange={(e) => setEmployees(Number(e.target.value))}
-                  className="mt-2 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2.5 font-mono text-sm tracking-normal text-ink tabular-nums outline-none focus:ring-2 focus:ring-leaf"
-                />
-              </label>
-              <label className="block font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
-                Energy $ / month
-                <input
-                  type="number"
-                  min={0}
-                  step={50}
-                  value={spend}
-                  onChange={(e) => setSpend(Number(e.target.value))}
-                  className="mt-2 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2.5 font-mono text-sm tracking-normal text-ink tabular-nums outline-none focus:ring-2 focus:ring-leaf"
-                />
-              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                  Personnel Count
+                  <input
+                    type="number"
+                    min={1}
+                    value={employees}
+                    onChange={(e) => setEmployees(Number(e.target.value))}
+                    className="mt-1.5 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-sm text-ink outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </label>
+                <label className="block font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                  Energy Spend ($/mo)
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={spend}
+                    onChange={(e) => setSpend(Number(e.target.value))}
+                    className="mt-1.5 w-full rounded-lg border border-rule bg-surface-2 px-3 py-2 font-mono text-sm text-ink outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </label>
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={busy}
-              className="mt-5 w-full rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-50"
+              className="mt-6 w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/95 disabled:opacity-50"
             >
-              {busy ? "Querying backend…" : "Estimate my footprint"}
+              {busy ? "Querying Go Backend..." : "Calculate Carbon Factor"}
             </button>
 
             {error && (
-              <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs text-red-500">
+              <div className="mt-4 rounded-lg bg-alarm/10 p-3 text-xs text-alarm border border-alarm/20">
                 {error}
               </div>
             )}
 
             {result && (
-              <div className="page-rise mt-6 border-t border-rule pt-5">
-                <div className="flex items-center gap-5">
-                  <div className="min-w-0">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
-                      Backend Estimated Footprint
-                    </p>
-                    <p className="font-serif text-3xl text-ink tabular-nums">
-                      {fmtTonnes(result.co2e / 1000.0)} ({result.co2e.toFixed(1)} {result.co2e_unit})
-                    </p>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      Factor: {result.emission_factor?.name || "Grid Electricity Mix"}
-                    </p>
-                  </div>
+              <div className="mt-6 border-t border-rule pt-5 space-y-4 page-rise">
+                <div className="rounded-lg bg-surface-2 p-4">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-ink-faint">
+                    Emissions Factor baseline
+                  </span>
+                  <p className="mt-1 font-serif text-3xl font-medium tracking-tight text-ink tabular-nums">
+                    {fmtTonnes(result.co2e / 1000.0)}
+                  </p>
+                  <p className="text-[11px] text-ink-muted mt-1 leading-normal">
+                    {result.co2e.toFixed(1)} {result.co2e_unit} calculated via Climatiq dataset: {result.emission_factor?.name || "Grid Electricity Mix"}
+                  </p>
                 </div>
+
                 <Link
                   to="/dashboard"
-                  className="mt-4 flex items-center justify-center gap-2 rounded-full bg-leaf px-5 py-2.5 text-sm font-medium text-primary-foreground"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-primary/10 border border-primary/20 py-2.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-all"
                 >
-                  Unlock full verified report <ArrowRight className="h-4 w-4" aria-hidden />
+                  Create Verified Account <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
-                <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
-                  Computed live by Go backend / Climatiq API
-                </p>
               </div>
             )}
           </form>
         </section>
 
+        {/* Visual Process Pipeline */}
         <section
-          className="page-rise mt-20 grid gap-5 sm:grid-cols-2"
+          className="mt-24 page-rise"
+          style={{ "--rise-delay": "0.16s" } as CSSProperties}
+        >
+          <div className="text-center max-w-xl mx-auto">
+            <h2 className="font-serif text-3xl text-ink">The Trust Pipeline</h2>
+            <p className="text-sm text-ink-muted mt-2">
+              Our automated credential validation pipeline tracks carbon from source registry to directory exposure.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-6 md:grid-cols-3 lg:grid-cols-5 relative">
+            {PIPELINE_STEPS.map((s, idx) => (
+              <div
+                key={s.label}
+                className="relative rounded-xl border border-rule bg-surface p-5 transition-all hover:border-primary/40 hover:-translate-y-0.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-ink-faint">{s.step}</span>
+                  <span className={`grid h-8 w-8 place-items-center rounded-lg ${s.color}`}>
+                    <s.icon className="h-4.5 w-4.5" />
+                  </span>
+                </div>
+                <h3 className="mt-4 font-serif text-base text-ink font-medium leading-tight">
+                  {s.label}
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-ink-muted">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Explain Grid: Measure, Verify, Anchor, Discover */}
+        <section
+          className="mt-24 border-t border-rule pt-20 page-rise"
           style={{ "--rise-delay": "0.24s" } as CSSProperties}
         >
-          {STEPS.map((s, i) => (
-            <article key={s.title} className="card-surface p-6">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent text-accent-foreground">
-                <s.icon className="h-4.5 w-4.5" aria-hidden />
-              </span>
-              <h3 className="mt-4 font-serif text-lg text-ink">
-                <span className="mr-2 font-mono text-xs text-leaf tabular-nums">0{i + 1}</span>
-                {s.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-ink-muted">{s.body}</p>
-            </article>
-          ))}
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            {VALUE_PROPS.map((v, i) => (
+              <div key={v.title} className="space-y-3">
+                <span className="font-mono text-[10px] text-primary bg-primary/5 border border-primary/10 rounded-full px-2 py-0.5 font-bold uppercase tracking-wider">
+                  Phase {i + 1}
+                </span>
+                <h3 className="font-serif text-lg text-ink font-medium">{v.title}</h3>
+                <p className="text-xs leading-relaxed text-ink-muted">{v.body}</p>
+              </div>
+            ))}
+          </div>
         </section>
       </main>
     </div>
