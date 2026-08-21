@@ -112,7 +112,7 @@ func main() {
 		protected.POST("/assessments", assessmentHandler.Calculate)
 		protected.GET("/assessments", assessmentHandler.List)
 		protected.GET("/assessments/:id", assessmentHandler.Get)
-		// protected.GET("/dashboard", dashboardHandler.Get)
+		protected.GET("/dashboard", assessmentHandler.Dashboard)
 
 	}
 
