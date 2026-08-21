@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -19,6 +18,15 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	_ "modernc.org/sqlite"
+	"net/http"
+
+	_ "modernc.org/sqlite"
+
+	"c-step/internal/api"
+	"c-step/internal/assessment"
+	"c-step/internal/auth"
+	"c-step/internal/emissions/climatiq"
+	"c-step/internal/verification"
 )
 
 func main() {
@@ -157,6 +165,16 @@ func main() {
 			// Blockchain anchoring routes.
 			protected.POST("/assessments/:id/anchor", blockchainHandler.Anchor)
 			protected.GET("/assessments/:id/blockchain-status", blockchainHandler.BlockchainStatus)
+
+			protected.POST("/emissions/estimate", emissionsHandler.Estimate)
+
+			protected.GET("/dashboard", assessmentHandler.Dashboard)
+
+			protected.POST("/assessments", assessmentHandler.Calculate)
+			protected.POST("/assessments/calculate", assessmentHandler.Calculate)
+			protected.GET("/assessments", assessmentHandler.List)
+			protected.GET("/assessments/:id", assessmentHandler.Get)
+			protected.GET("/assessments/:id/verify", assessmentHandler.Verify)
 		}
 	}
 
