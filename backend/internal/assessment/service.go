@@ -322,3 +322,7 @@ func (s *Service) Get(
 ) (*AssessmentResult, error) {
 	return s.repo.GetByID(ctx, id, userID)
 }
+
+func (s *Service) GetDirectory(ctx context.Context) ([]map[string]interface{}, error) {
+	return s.repo.GetDirectory(ctx)
+}
