@@ -26,6 +26,21 @@ type EstimateRequest struct {
 	Parameters  map[string]interface{} `json:"parameters" binding:"required"`
 }
 
+func (h *EmissionsHandler) MicroEstimate(c *gin.Context) {
+	var input MicroEstimateRequest
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request body",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"error": "micro estimate calculation not implemented yet",
+	})
+}
 func (h *EmissionsHandler) Estimate(c *gin.Context) {
 	var input EstimateRequest
 

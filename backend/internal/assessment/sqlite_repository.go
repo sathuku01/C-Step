@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strings"
 )
 
 type SQLiteRepository struct {
@@ -125,4 +127,102 @@ func (r *SQLiteRepository) List(
 	}
 
 	return results, nil
+}
+
+func (r *SQLiteRepository) GetDirectory(ctx context.Context) ([]map[string]interface{}, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT u.id, u.company, a.data
+		FROM users u
+		LEFT JOIN assessments a ON a.id = (
+			SELECT id FROM assessments WHERE user_id = u.id ORDER BY rowid DESC LIMIT 1
+		)
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query directory: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []map[string]interface{}
+	for rows.Next() {
+		var userID, companyName string
+		var rawData sql.NullString
+
+		if err := rows.Scan(&userID, &companyName, &rawData); err != nil {
+			return nil, fmt.Errorf("scan directory row: %w", err)
+		}
+
+		score := 40
+		var tonnes float64 = 0
+		tier := "self"
+		sector := "general"
+		sectorLabel := "General Sector"
+		var verifiedSources []string
+
+		if rawData.Valid && rawData.String != "" {
+			var result AssessmentResult
+			if err := json.Unmarshal([]byte(rawData.String), &result); err == nil {
+				tonnes = result.TotalCO2eKg / 1000.0
+				if result.Badge != nil {
+					tier = result.Badge.Tier
+					sector = result.Badge.BaselineSector
+					ratio := result.Badge.RatioToBaseline
+					switch tier {
+					case "gold":
+						score = int(math.Round(100.0 - ratio*30.0))
+						if score < 85 {
+							score = 88
+						}
+					case "silver":
+						score = int(math.Round(100.0 - ratio*30.0))
+						if score < 70 || score >= 85 {
+							score = 78
+						}
+					case "bronze":
+						score = int(math.Round(100.0 - ratio*30.0))
+						if score < 50 || score >= 70 {
+							score = 60
+						}
+					}
+					if score > 100 {
+						score = 100
+					}
+					if score < 0 {
+						score = 0
+					}
+				}
+				if result.Verification != nil && result.Verification.Verifiable {
+					verifiedSources = []string{"Utility API", "Climatiq Verified"}
+					if tier == "self" {
+						tier = "api"
+					}
+				}
+			}
+		}
+
+		if sector == "general" {
+			sectorLabel = "General business"
+		} else {
+			sectorLabel = strings.Title(sector)
+		}
+
+		entry := map[string]interface{}{
+			"id":              userID,
+			"name":            companyName,
+			"sector":          sector,
+			"sectorLabel":     sectorLabel,
+			"location":        "Nairobi, KE",
+			"score":           score,
+			"tonnes":          tonnes,
+			"tier":            tier,
+			"employees":       10,
+			"verifiedSources": verifiedSources,
+		}
+		entries = append(entries, entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate directory rows: %w", err)
+	}
+
+	return entries, nil
 }

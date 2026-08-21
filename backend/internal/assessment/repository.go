@@ -11,4 +11,5 @@ type Repository interface {
 	Create(ctx context.Context, assessment *AssessmentResult) error
 	GetByID(ctx context.Context, id string, userID string) (*AssessmentResult, error)
 	List(ctx context.Context, userID string) ([]*AssessmentResult, error)
+	GetDirectory(ctx context.Context) ([]map[string]interface{}, error)
 }

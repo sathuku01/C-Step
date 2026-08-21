@@ -27,6 +27,8 @@ func NewSQLiteRepository(db *sql.DB) (*SQLiteRepository, error) {
 		CREATE TABLE IF NOT EXISTS users (
 			id TEXT PRIMARY KEY,
 			email TEXT NOT NULL UNIQUE,
+			name TEXT NOT NULL,
+			company TEXT NOT NULL,
 			password TEXT NOT NULL
 		)
 	`)
@@ -43,10 +45,12 @@ func (r *SQLiteRepository) Create(
 ) error {
 	_, err := r.db.ExecContext(
 		ctx,
-		`INSERT INTO users (id, email, password)
-		 VALUES (?, ?, ?)`,
+		`INSERT INTO users (id, email, name, company, password)
+		 VALUES (?, ?, ?, ?, ?)`,
 		user.ID,
 		user.Email,
+		user.Name,
+		user.Company,
 		user.Password,
 	)
 
@@ -65,13 +69,15 @@ func (r *SQLiteRepository) GetByEmail(
 
 	err := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, email, password
+		`SELECT id, email, name, company, password
 		 FROM users
 		 WHERE email = ?`,
 		email,
 	).Scan(
 		&user.ID,
 		&user.Email,
+		&user.Name,
+		&user.Company,
 		&user.Password,
 	)
 
@@ -94,13 +100,15 @@ func (r *SQLiteRepository) GetByID(
 
 	err := r.db.QueryRowContext(
 		ctx,
-		`SELECT id, email, password
+		`SELECT id, email, name, company, password
 		 FROM users
 		 WHERE id = ?`,
 		id,
 	).Scan(
 		&user.ID,
 		&user.Email,
+		&user.Name,
+		&user.Company,
 		&user.Password,
 	)
 

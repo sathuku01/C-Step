@@ -128,6 +128,8 @@ func main() {
 	authService := auth.NewService(authRepo)
 	authHandler := auth.NewHandler(authService)
 
+
+microEstimateHandler := api.NewMicroEstimateHandler(climatiqClient)
 	v1 := router.Group("/api/v1")
 	{
 		v1.GET("/health", func(c *gin.Context) {
@@ -138,7 +140,8 @@ func main() {
 
 		v1.POST("/auth/register", authHandler.Register)
 		v1.POST("/auth/login", authHandler.Login)
-
+		v1.GET("/directory", assessmentHandler.Directory)
+		v1.POST("/emissions/micro-estimate", microEstimateHandler.Estimate)
 		// Everything below requires a valid Bearer token; the middleware
 		// sets "user_id" in the context, which handlers read via getUserID.
 		protected := v1.Group("/")
@@ -160,15 +163,6 @@ func main() {
 			protected.POST("/assessments/:id/anchor", blockchainHandler.Anchor)
 			protected.GET("/assessments/:id/blockchain-status", blockchainHandler.BlockchainStatus)
 
-			protected.POST("/emissions/estimate", emissionsHandler.Estimate)
-
-			protected.GET("/dashboard", assessmentHandler.Dashboard)
-
-			protected.POST("/assessments", assessmentHandler.Calculate)
-			protected.POST("/assessments/calculate", assessmentHandler.Calculate)
-			protected.GET("/assessments", assessmentHandler.List)
-			protected.GET("/assessments/:id", assessmentHandler.Get)
-			protected.GET("/assessments/:id/verify", assessmentHandler.Verify)
 		}
 	}
 

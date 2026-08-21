@@ -2,9 +2,8 @@ import { useState, type CSSProperties, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Building2, Gauge, PlugZap, ShieldCheck, Sparkles } from "lucide-react";
 import { SiteNav } from "../components/SiteNav";
-import { ScoreRing } from "../components/viz";
-import { postEstimate } from "../lib/api";
-import { SECTORS, fmtMoney, fmtTonnes, type EstimateResult, type SectorKey } from "../lib/carbon";
+import { postEstimate, type EstimateResponse } from "../lib/api";
+import { SECTORS, fmtTonnes, type SectorKey } from "../lib/carbon";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -55,14 +54,19 @@ function Landing() {
   const [sector, setSector] = useState<SectorKey>("hospitality");
   const [employees, setEmployees] = useState(24);
   const [spend, setSpend] = useState(3200);
-  const [result, setResult] = useState<EstimateResult | null>(null);
+  const [result, setResult] = useState<EstimateResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
+    setError(null);
     try {
-      setResult(await postEstimate({ sector, employees, monthlyEnergySpend: spend }));
+      const res = await postEstimate({ sector, employees, monthlyEnergySpend: spend });
+      setResult(res);
+    } catch (err: any) {
+      setError(err?.message || "Failed to query backend emissions factor API.");
     } finally {
       setBusy(false);
     }
@@ -112,7 +116,7 @@ function Landing() {
             style={{ "--rise-delay": "0.12s" } as CSSProperties}
           >
             <h2 className="font-serif text-xl text-ink">Micro-calculator</h2>
-            <p className="mt-1 text-sm text-ink-muted">Three inputs. No account needed.</p>
+            <p className="mt-1 text-sm text-ink-muted">Three inputs. Powered by Climatiq API.</p>
 
             <label className="mt-5 block font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
               Sector
@@ -158,57 +162,38 @@ function Landing() {
               disabled={busy}
               className="mt-5 w-full rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-50"
             >
-              {busy ? "Estimating…" : "Estimate my footprint"}
+              {busy ? "Querying backend…" : "Estimate my footprint"}
             </button>
+
+            {error && (
+              <div className="mt-4 rounded-lg bg-red-500/10 p-3 text-xs text-red-500">
+                {error}
+              </div>
+            )}
 
             {result && (
               <div className="page-rise mt-6 border-t border-rule pt-5">
                 <div className="flex items-center gap-5">
-                  <ScoreRing score={result.score} size={112} />
                   <div className="min-w-0">
                     <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
-                      Estimated annual footprint
+                      Backend Estimated Footprint
                     </p>
                     <p className="font-serif text-3xl text-ink tabular-nums">
-                      {fmtTonnes(result.totalTonnes)} CO₂e
+                      {fmtTonnes(result.co2e / 1000.0)} ({result.co2e.toFixed(1)} {result.co2e_unit})
                     </p>
-                    <p className="mt-1 text-sm text-ink-muted">
-                      Sector peers your size average{" "}
-                      <span className="text-ink tabular-nums">{fmtTonnes(result.peerTonnes)}</span>.
-                      Up to{" "}
-                      <span className="text-leaf tabular-nums">
-                        {fmtMoney(result.savingsPotential)}
-                      </span>
-                      /yr is recoverable from efficiency alone.
+                    <p className="mt-1 text-xs text-ink-muted">
+                      Factor: {result.emission_factor?.name || "Grid Electricity Mix"}
                     </p>
                   </div>
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  {[
-                    ["Scope 1", result.scope1],
-                    ["Scope 2", result.scope2],
-                    ["Scope 3", result.scope3],
-                  ].map(([label, v]) => (
-                    <div key={String(label)} className="rounded-lg bg-surface-2 py-2.5">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
-                        {label}
-                      </p>
-                      <p className="font-mono text-sm text-ink tabular-nums">
-                        {Number(v).toFixed(1)} t
-                      </p>
-                    </div>
-                  ))}
                 </div>
                 <Link
                   to="/dashboard"
                   className="mt-4 flex items-center justify-center gap-2 rounded-full bg-leaf px-5 py-2.5 text-sm font-medium text-primary-foreground"
                 >
-                  Unlock the full report <ArrowRight className="h-4 w-4" aria-hidden />
+                  Unlock full verified report <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
                 <p className="mt-2 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-ink-faint">
-                  {result.source === "live"
-                    ? "Computed by local backend"
-                    : "Computed locally · demo model"}
+                  Computed live by Go backend / Climatiq API
                 </p>
               </div>
             )}

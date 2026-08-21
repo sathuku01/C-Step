@@ -11,18 +11,28 @@ export function useBackendStatus() {
 }
 
 export function BackendStatus() {
-  const { data: live, isPending } = useBackendStatus();
-  const state = isPending ? "checking" : live ? "live" : "mock";
+  const { data: connected, isPending } = useBackendStatus();
 
-  const dot = state === "live" ? "bg-leaf" : state === "mock" ? "bg-amber" : "bg-ink-faint";
-  const label = state === "live" ? "Live backend" : state === "mock" ? "Demo data" : "Checking…";
+  const dot = isPending
+    ? "bg-ink-faint"
+    : connected
+      ? "bg-leaf"
+      : "bg-red-500 animate-pulse";
+
+  const label = isPending
+    ? "Checking…"
+    : connected
+      ? "Backend connected"
+      : "Backend unavailable";
 
   return (
     <span
       title={
-        state === "live"
-          ? `Connected to ${API_BASE}`
-          : `No backend at ${API_BASE} — showing bundled mock data`
+        isPending
+          ? "Checking connection to API server…"
+          : connected
+            ? `Connected to ${API_BASE}`
+            : `Unable to reach API server at ${API_BASE}`
       }
       className="inline-flex items-center gap-2 rounded-full border border-rule bg-surface px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-muted"
     >
