@@ -6,6 +6,7 @@ import (
 	"c-step/internal/badge"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"net/http"
 
 	"c-step/internal/api"
 	"c-step/internal/assessment"
@@ -29,13 +30,13 @@ func main() {
 	baselineStore := badge.NewStaticBaselineStore()
 
 	baselineStore.Add(badge.Baseline{
-    Sector:  "general",
-    CO2eKg:  5000,
-    Version: "v1",
-})
-
+		Sector:  "general",
+		CO2eKg:  5000,
+		Version: "v1",
+	})
 
 	badgeService := badge.NewService(baselineStore)
+	assessmentRepo := assessment.NewMemoryRepository()
 	assessmentService := assessment.NewService(
 		climatiqClient,
 		badgeService,
@@ -54,6 +55,17 @@ func main() {
 			"/assessments/calculate",
 			assessmentHandler.Calculate,
 		)
+
+		v1.GET("/health", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"status": "ok",
+			})
+		})
+
+		v1.POST("/assessments", assessmentHandler.Calculate)
+		v1.GET("/assessments", assessmentHandler.List)
+		v1.GET("/assessments/:id", assessmentHandler.Get)
+
 	}
 
 	log.Println("C-step API running on :8080")
