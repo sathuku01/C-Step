@@ -30,6 +30,8 @@ func main() {
 
 	router := gin.Default()
 
+	router.Use(api.CORSMiddleware())
+
 	emissionsHandler := api.NewEmissionsHandler(climatiqClient)
 	// assessmentService := assessment.NewService(climatiqClient)
 	baselineStore := badge.NewStaticBaselineStore()
@@ -116,9 +118,9 @@ func main() {
 
 	}
 
-	log.Println("C-step API running on :8080")
+	log.Println("C-step API running on :8000")
 
-	if err := router.Run(":8080"); err != nil {
+	if err := router.Run(":8000"); err != nil {
 		log.Fatal(err)
 	}
 }
