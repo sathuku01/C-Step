@@ -1,0 +1,121 @@
+package main
+
+import (
+	"database/sql"
+	"log"
+	"os"
+
+	"c-step/internal/badge"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+	"net/http"
+
+	_ "modernc.org/sqlite"
+
+	"c-step/internal/api"
+	"c-step/internal/assessment"
+	"c-step/internal/auth"
+	"c-step/internal/emissions/climatiq"
+	"c-step/internal/verification"
+)
+
+func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found")
+	}
+
+	climatiqClient, err := climatiq.NewClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "c-step.db"
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET is not set")
+	}
+
+	router := gin.Default()
+
+	emissionsHandler := api.NewEmissionsHandler(climatiqClient)
+
+	baselineStore := badge.NewStaticBaselineStore()
+
+	baselineStore.Add(badge.Baseline{
+		Sector:  "general",
+		CO2eKg:  5000,
+		Version: "v1",
+	})
+
+	badgeService := badge.NewService(baselineStore)
+
+	verificationService := verification.NewService()
+
+	assessmentRepo, err := assessment.NewSQLiteRepository(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	assessmentService := assessment.NewService(
+		climatiqClient,
+		badgeService,
+		verificationService,
+		assessmentRepo,
+	)
+
+	assessmentHandler := api.NewAssessmentHandler(assessmentService)
+
+	authRepo, err := auth.NewSQLiteRepository(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	authService := auth.NewService(authRepo)
+	authHandler := auth.NewHandler(authService)
+
+	v1 := router.Group("/api/v1")
+	{
+		v1.GET("/health", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"status": "ok",
+			})
+		})
+
+		v1.POST("/auth/register", authHandler.Register)
+		v1.POST("/auth/login", authHandler.Login)
+
+		// Everything below requires a valid Bearer token; the middleware
+		// sets "user_id" in the context, which handlers read via getUserID.
+		protected := v1.Group("/")
+		protected.Use(auth.Middleware(jwtSecret))
+		{
+			protected.GET("/auth/me", authHandler.Me)
+
+			protected.POST("/emissions/estimate", emissionsHandler.Estimate)
+
+			protected.GET("/dashboard", assessmentHandler.Dashboard)
+
+			protected.POST("/assessments", assessmentHandler.Calculate)
+			protected.POST("/assessments/calculate", assessmentHandler.Calculate)
+			protected.GET("/assessments", assessmentHandler.List)
+			protected.GET("/assessments/:id", assessmentHandler.Get)
+			protected.GET("/assessments/:id/verify", assessmentHandler.Verify)
+		}
+	}
+
+	log.Println("C-step API running on :8080")
+
+	if err := router.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
+}
