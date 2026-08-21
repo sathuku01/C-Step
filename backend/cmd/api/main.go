@@ -1,8 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 
+	_ "modernc.org/sqlite"
+	"os"
+
+	"c-step/internal/auth"
 	"c-step/internal/badge"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -37,7 +42,16 @@ func main() {
 
 	badgeService := badge.NewService(baselineStore)
 
-	assessmentRepo := assessment.NewMemoryRepository()
+	db, err := sql.Open("sqlite", "cstep.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	assessmentRepo, err := assessment.NewSQLiteRepository(db)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	assessmentService := assessment.NewService(
 		climatiqClient,
@@ -46,6 +60,14 @@ func main() {
 	)
 
 	assessmentHandler := api.NewAssessmentHandler(assessmentService)
+
+	authRepo, err := auth.NewSQLiteRepository(db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	authService := auth.NewService(authRepo)
+	authHandler := auth.NewHandler(authService)
 
 	v1 := router.Group("/api/v1")
 	{
@@ -65,14 +87,32 @@ func main() {
 			})
 		})
 
-		v1.GET(
-			"/dashboard",
-			assessmentHandler.Dashboard,
-		)
+		// v1.GET(
+		// 	"/dashboard",
+		// 	assessmentHandler.Dashboard,
+		// )
 
-		v1.POST("/assessments", assessmentHandler.Calculate)
-		v1.GET("/assessments", assessmentHandler.List)
-		v1.GET("/assessments/:id", assessmentHandler.Get)
+		// v1.GET("/assessments", assessmentHandler.List)
+		// v1.GET("/assessments/:id", assessmentHandler.Get)
+
+		v1.POST("/auth/register", authHandler.Register)
+		v1.POST("/auth/login", authHandler.Login)
+
+		// v1.GET(
+		// 	"/auth/me",
+		// 	auth.Middleware(os.Getenv("JWT_SECRET")),
+		// 	authHandler.Me,
+		// )
+
+		protected := v1.Group("")
+		protected.Use(auth.Middleware(os.Getenv("JWT_SECRET")))
+
+		protected.GET("/auth/me", authHandler.Me)
+
+		protected.POST("/assessments", assessmentHandler.Calculate)
+		protected.GET("/assessments", assessmentHandler.List)
+		protected.GET("/assessments/:id", assessmentHandler.Get)
+		// protected.GET("/dashboard", dashboardHandler.Get)
 
 	}
 
