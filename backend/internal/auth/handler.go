@@ -18,13 +18,20 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
-type authRequest struct {
+type registerRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
+	Name     string `json:"name" binding:"required"`
+	Company  string `json:"company" binding:"required"`
+}
+
+type loginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
 func (h *Handler) Register(c *gin.Context) {
-	var input authRequest
+	var input registerRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -37,6 +44,8 @@ func (h *Handler) Register(c *gin.Context) {
 		c.Request.Context(),
 		input.Email,
 		input.Password,
+		input.Name,
+		input.Company,
 	)
 
 	if err != nil {
@@ -80,7 +89,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 
 func (h *Handler) Login(c *gin.Context) {
-	var input authRequest
+	var input loginRequest
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
