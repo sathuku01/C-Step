@@ -1,0 +1,336 @@
+openapi: 3.1.0
+info:
+  title: C-Step API
+  version: dev
+  description: >
+    Backend API for C-Step carbon assessments. Served by Gin on :8080.
+    No authentication is required on any route yet. Assessment storage is
+    in-memory (lost on restart); IDs are UUIDv4 generated server-side.
+servers:
+  - url: http://localhost:8080/api/v1
+
+paths:
+  /health:
+    get:
+      summary: Liveness check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, example: ok }
+
+  /assessments:
+    post:
+      summary: Create assessment
+      description: >
+        Calculates emissions for electricity/transport/fuel inputs via
+        Climatiq, evaluates an EcoBid badge tier against the sector baseline,
+        persists and returns the assessment. Identical to
+        POST /assessments/calculate.
+      operationId: createAssessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAssessmentRequest" }
+      responses:
+        "200":
+          description: Assessment created and calculated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+    get:
+      summary: List assessments
+      description: >
+        Returns all stored assessments in unspecified order (in-memory map
+        iteration).
+      operationId: listAssessments
+      responses:
+        "200":
+          description: List of assessments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AssessmentResult" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /assessments/calculate:
+    post:
+      summary: Create assessment (alias)
+      description: Alias of POST /assessments — same handler and contract.
+      operationId: calculateAssessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAssessmentRequest" }
+      responses:
+        "200":
+          description: Assessment created and calculated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+
+  /assessments/{id}:
+    get:
+      summary: Get assessment by ID
+      operationId: getAssessment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The requested assessment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssessmentResult" }
+        "404":
+          description: Assessment not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /dashboard:
+    get:
+      summary: Dashboard aggregates
+      description: Total assessment count, summed CO2e, and the latest assessment.
+      operationId: getDashboard
+      responses:
+        "200":
+          description: Dashboard totals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total_assessments, total_co2e_kg]
+                properties:
+                  total_assessments: { type: integer }
+                  total_co2e_kg: { type: number, format: double }
+                  latest_assessment:
+                    allOf:
+                      - $ref: "#/components/schemas/AssessmentResult"
+                    description: Omitted when there are no assessments yet
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /emissions/estimate:
+    post:
+      summary: Raw Climatiq estimate proxy
+      description: >
+        Thin proxy to Climatiq POST /data/v1/estimate. Requires a valid
+        CLIMATIQ_API_KEY configured server-side.
+      operationId: estimateEmissions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EstimateRequest" }
+      responses:
+        "200":
+          description: Emissions estimate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EstimateResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+
+components:
+  schemas:
+    CreateAssessmentRequest:
+      type: object
+      description: >
+        No server-side binding:"required" tags — every field is optional at
+        bind time, but semantic rules apply:
+        - A category is only calculated when its quantity > 0
+          (electricity_kwh > 0, transport.distance_km > 0, fuel.litres > 0).
+        - An all-zero request fails with 502 because badge evaluation requires
+          total_co2e_kg > 0. Frontend forms must require at least one category.
+        - fuel.type must be "diesel" and transport.vehicle_type must be
+          "light_duty_truck"; any other value returns 502.
+      properties:
+        electricity_kwh:
+          type: number
+          format: double
+          example: 1200
+        electricity_evidence: { $ref: "#/components/schemas/EvidenceType" }
+        sector:
+          type: string
+          example: general
+          description: Empty or unknown sector falls back to the "general" baseline.
+        fuel:
+          allOf:
+            - $ref: "#/components/schemas/FuelInput"
+          nullable: true
+        transport:
+          allOf:
+            - $ref: "#/components/schemas/TransportInput"
+          nullable: true
+
+    FuelInput:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [diesel]
+          description: Only "diesel" is supported; anything else -> 502.
+        litres: { type: number, format: double }
+        evidence: { $ref: "#/components/schemas/EvidenceType" }
+
+    TransportInput:
+      type: object
+      properties:
+        vehicle_type:
+          type: string
+          enum: [light_duty_truck]
+          description: Only value accepted; anything else -> 502.
+        distance_km: { type: number, format: double }
+        evidence: { $ref: "#/components/schemas/EvidenceType" }
+
+    EvidenceType:
+      type: string
+      enum: [utility_bill, receipt, meter, business_record, estimate]
+      description: >
+        Maps to per-category confidence: utility_bill|receipt|meter -> high,
+        business_record -> medium, estimate -> low, anything else ->
+        unverified. Unknown strings are NOT rejected.
+
+    AssessmentResult:
+      type: object
+      required: [id, total_co2e_kg, breakdown]
+      properties:
+        id:
+          type: string
+          format: uuid
+        total_co2e_kg: { type: number, format: double }
+        breakdown:
+          type: array
+          items:
+            type: object
+            required: [category, co2e_kg, evidence, confidence]
+            properties:
+              category:
+                type: string
+                enum: [electricity, transport, fuel]
+              co2e_kg: { type: number, format: double }
+              evidence: { type: string }
+              confidence:
+                type: string
+                enum: [high, medium, low, unverified]
+        badge:
+          allOf:
+            - $ref: "#/components/schemas/BadgeResult"
+          nullable: true
+
+    BadgeResult:
+      type: object
+      required: [tier, ratio_to_baseline, baseline_co2e_kg, baseline_sector]
+      properties:
+        tier:
+          type: string
+          enum: [gold, silver, bronze]
+          description: >
+            ratio_to_baseline <= 0.70 -> gold, <= 1.00 -> silver, otherwise
+            bronze. Current static baseline: general = 5000 kg CO2e (v1).
+        ratio_to_baseline: { type: number, format: double }
+        baseline_co2e_kg:
+          type: number
+          format: double
+          example: 5000
+        baseline_sector:
+          type: string
+          example: general
+
+    EstimateRequest:
+      type: object
+      required: [activity_id, data_version, parameters]
+      properties:
+        activity_id: { type: string }
+        data_version:
+          type: string
+          example: "^21"
+        region:
+          type: string
+          example: GB
+        year: { type: integer }
+        parameters:
+          type: object
+          additionalProperties: true
+          example:
+            energy: 1200
+            energy_unit: kWh
+
+    EstimateResponse:
+      type: object
+      properties:
+        co2e: { type: number }
+        co2e_unit: { type: string }
+        calculation_method: { type: string }
+        calculation_origin: { type: string }
+        activity_data:
+          type: object
+          properties:
+            activity_value: { type: number }
+            activity_unit: { type: string }
+        emission_factor:
+          type: object
+          properties:
+            name: { type: string }
+            activity_id: { type: string }
+            id: { type: string }
+            access_type: { type: string }
+            source: { type: string }
+            source_dataset: { type: string }
+            year: { type: integer }
+            region: { type: string }
+            category: { type: string }
+            source_lca_activity: { type: string }
+            data_quality_flags:
+              type: array
+              items: { type: string }
+        notices:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              message: { type: string }
+
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        details:
+          type: string
+          description: Present on 400 bind failures only.
+
+  responses:
+    BadRequest:
+      description: Malformed JSON or failed request binding
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    UpstreamError:
+      description: >
+        Climatiq call failed, unsupported input value, or badge evaluation
+        failure (e.g. all-zero footprint).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
