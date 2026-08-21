@@ -36,15 +36,14 @@ func main() {
 	})
 
 	badgeService := badge.NewService(baselineStore)
-	
 
 	assessmentRepo := assessment.NewMemoryRepository()
 
-assessmentService := assessment.NewService(
-    climatiqClient,
-    badgeService,
-    assessmentRepo,
-)
+	assessmentService := assessment.NewService(
+		climatiqClient,
+		badgeService,
+		assessmentRepo,
+	)
 
 	assessmentHandler := api.NewAssessmentHandler(assessmentService)
 
@@ -65,6 +64,11 @@ assessmentService := assessment.NewService(
 				"status": "ok",
 			})
 		})
+
+		v1.GET(
+			"/dashboard",
+			assessmentHandler.Dashboard,
+		)
 
 		v1.POST("/assessments", assessmentHandler.Calculate)
 		v1.GET("/assessments", assessmentHandler.List)
