@@ -5,6 +5,7 @@ import (
 	"c-step/internal/emissions/climatiq"
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 )
 
 const (
@@ -15,15 +16,18 @@ const (
 type Service struct {
 	climatiq *climatiq.Client
 	badge    *badge.Service
+	repo     Repository
 }
 
 func NewService(
 	client *climatiq.Client,
 	badgeService *badge.Service,
+	repo Repository,
 ) *Service {
 	return &Service{
 		climatiq: client,
 		badge:    badgeService,
+		repo:     repo,
 	}
 }
 
@@ -213,6 +217,12 @@ func (s *Service) Calculate(
 		RatioToBaseline: badgeResult.RatioToBaseline,
 		BaselineCO2eKg:  badgeResult.BaselineCO2eKg,
 		BaselineSector:  badgeResult.BaselineSector,
+	}
+
+	result.ID = uuid.NewString()
+
+	if err := s.repo.Create(ctx, result); err != nil {
+		return nil, fmt.Errorf("save assessment: %w", err)
 	}
 
 	return result, nil
