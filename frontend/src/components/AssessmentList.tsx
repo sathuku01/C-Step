@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getAssessments, getAssessmentById, type AssessmentResult } from "../lib/api";
 import { AssessmentInspector } from "./AssessmentInspector";
+import { TrustTierBadge } from "./TrustBadges";
 
 export function AssessmentList() {
   const queryClient = useQueryClient();
@@ -90,40 +91,44 @@ export function AssessmentList() {
 
   return (
     <div className="space-y-6">
-      {/* Direct UUID Lookup Bar */}
-      <div className="card-surface p-5">
-        <form onSubmit={handleLookup}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Advanced Auditor Lookup details */}
+      <details className="group rounded-xl border border-rule bg-surface p-4 transition-all hover:bg-surface-2">
+        <summary className="flex cursor-pointer items-center justify-between font-mono text-[10px] uppercase tracking-[0.14em] text-ink-muted outline-none select-none">
+          <span>Advanced Auditor UUID Registry Tool</span>
+          <span className="text-[10px] group-open:rotate-180 transition-transform">▼</span>
+        </summary>
+        <div className="mt-4 pt-4 border-t border-rule">
+          <form onSubmit={handleLookup} className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h4 className="font-serif text-lg text-ink">Fetch Assessment by ID</h4>
-              <p className="text-xs text-ink-muted">
-                Execute GET /api/v1/assessments/:id directly against the Go backend
+              <p className="text-xs font-serif text-ink font-semibold">Query API Registry Directly</p>
+              <p className="text-[11px] text-ink-muted">
+                Execute GET /api/v1/assessments/:id directly against the Go backend database
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="text"
                 value={lookupId}
                 onChange={(e) => setLookupId(e.target.value)}
-                placeholder="Paste UUID (e.g. 3f2e1a9b...)"
-                className="w-64 rounded-lg border border-rule bg-surface-2 px-3 py-1.5 font-mono text-xs text-ink placeholder:text-ink-faint focus:ring-2 focus:ring-leaf outline-none"
+                placeholder="Paste assessment UUID..."
+                className="w-64 rounded-lg border border-rule bg-surface-2 px-3 py-1.5 font-mono text-xs text-ink placeholder:text-ink-faint focus:ring-2 focus:ring-primary outline-none"
               />
               <button
                 type="submit"
                 disabled={isLookingUp || !lookupId.trim()}
-                className="rounded-lg bg-leaf px-4 py-1.5 font-mono text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                className="rounded-lg bg-primary px-4 py-1.5 font-mono text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {isLookingUp ? "Fetching..." : "Fetch"}
               </button>
             </div>
-          </div>
+          </form>
           {lookupError && (
-            <p className="mt-2 flex items-center gap-1 font-mono text-xs text-red-500">
+            <p className="mt-2 flex items-center gap-1 font-mono text-xs text-alarm">
               <AlertCircle className="h-3.5 w-3.5" /> {lookupError}
             </p>
           )}
-        </form>
-      </div>
+        </div>
+      </details>
 
       {/* Main List Container */}
       <div className="card-surface p-6">
@@ -249,11 +254,8 @@ export function AssessmentList() {
 
                   <div className="flex items-center gap-6">
                     {/* Badge Pill */}
-                    {item.badge && (
-                      <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-xs font-medium uppercase tracking-wider ${badgeColors}`}>
-                        <Award className="h-3.5 w-3.5" />
-                        {item.badge.tier}
-                      </div>
+                    {item.badge?.tier && (
+                      <TrustTierBadge tier={item.badge.tier} />
                     )}
 
                     {/* Total CO2e */}
