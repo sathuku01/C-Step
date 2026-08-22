@@ -21,7 +21,7 @@ func NewMicroEstimateHandler(client *climatiq.Client) *MicroEstimateHandler {
 type MicroEstimateRequest struct {
 	Sector             string  `json:"sector" binding:"required"`
 	Employees          int     `json:"employees" binding:"required,min=1"`
-	MonthlyEnergySpend float64 `json:"monthly_energy_spend" binding:"required,gte=0"`
+	MonthlyEnergySpend float64 `json:"monthlyEnergySpend" binding:"required,gte=0"`
 }
 
 type MicroEstimateResponse struct {
@@ -35,6 +35,7 @@ type MicroEstimateResponse struct {
 	Source           string  `json:"source"`
 
 	MonthlyEnergySpend float64 `json:"monthly_energy_spend"`
+	
 	AnnualEnergyKWh    float64 `json:"annual_energy_kwh"`
 }
 
