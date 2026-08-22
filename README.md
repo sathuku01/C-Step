@@ -1,6 +1,11 @@
 ﻿# C-Step — EcoBid Ledger
 
 > **Zone01 Kisumu GreenTech Hackathon 2026**  
+
+https://drive.google.com/file/d/14riLCQKtikiJm-ssnGOFXmr23aDCz_gj/view?usp=drivesdk
+
+
+
 > AI + Blockchain track submission
 
 C-Step is an accessible, digital ESG verification platform that helps SMEs measure, verify, and showcase their carbon footprint in minutes.  It bridges the gap between enterprise Scope 3 compliance demands and the limited capacity of small businesses to prove their green credentials.
