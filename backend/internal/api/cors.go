@@ -43,7 +43,7 @@ func getAllowedOrigins() []string {
 	}
 
 	return []string{
-		"https://situoc-step.netlify.app/"
+		"https://situoc-step.netlify.app",
 		"http://localhost:5173",
 		"http://localhost:3000",
 		"http://localhost:8080",
