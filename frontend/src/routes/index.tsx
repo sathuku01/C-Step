@@ -10,7 +10,11 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";import { SiteNav } from "../components/SiteNav";
-import { postEstimate, type EstimateResponse } from "../lib/api";
+import {
+  postEstimate,
+  createAssessment,
+  type MicroEstimateResponse,
+} from "../lib/api";
 import { SECTORS, fmtTonnes, type SectorKey } from "../lib/carbon";
 
 export const Route = createFileRoute("/")({
@@ -96,23 +100,48 @@ function Landing() {
   const [sector, setSector] = useState<SectorKey>("hospitality");
   const [employees, setEmployees] = useState(24);
   const [spend, setSpend] = useState(3200);
-  const [result, setResult] = useState<EstimateResponse | null>(null);
+  const [result, setResult] = useState<MicroEstimateResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await postEstimate({ sector, employees, monthlyEnergySpend: spend });
-      setResult(res);
-    } catch (err: any) {
-      setError(err?.message || "Failed to query backend emissions factor API.");
-    } finally {
-      setBusy(false);
-    }
+ async function onSubmit(e: FormEvent) {
+  e.preventDefault();
+  setBusy(true);
+  setError(null);
+
+  try {
+    // 1. Run the live backend calculation.
+    const res = await postEstimate({
+      sector,
+      employees,
+      monthlyEnergySpend: spend,
+    });
+
+    console.log("CALCULATION PAYLOAD:", {
+  sector,
+  employees,
+  monthlyEnergySpend: spend,
+});
+
+    // 2. Persist the calculation as an assessment.
+    await createAssessment({
+      sector,
+      electricity_kwh: res.annual_energy_kwh,
+      electricity_evidence: "estimate",
+    });
+
+    // 3. Show the calculation result.
+    setResult(res);
+  } catch (err: unknown) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : "Failed to calculate and save the assessment.",
+    );
+  } finally {
+    setBusy(false);
   }
+}
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
@@ -207,7 +236,7 @@ function Landing() {
               disabled={busy}
               className="mt-6 w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/95 disabled:opacity-50"
             >
-              {busy ? "Querying Go Backend..." : "Calculate Carbon Factor"}
+              {busy ? "Calculating & Saving..." : "Calculate & Save Assessment"}
             </button>
 
             {error && (
@@ -223,11 +252,42 @@ function Landing() {
                     Emissions Factor baseline
                   </span>
                   <p className="mt-1 font-serif text-3xl font-medium tracking-tight text-ink tabular-nums">
-                    {fmtTonnes(result.co2e / 1000.0)}
-                  </p>
-                  <p className="text-[11px] text-ink-muted mt-1 leading-normal">
-                    {result.co2e.toFixed(1)} {result.co2e_unit} calculated via Climatiq dataset: {result.emission_factor?.name || "Grid Electricity Mix"}
-                  </p>
+  {fmtTonnes(result.total_tonnes)}
+</p>
+
+<p className="text-[11px] text-ink-muted mt-1 leading-normal">
+  {result.total_tonnes.toFixed(2)} tonnes CO₂e annually ·
+  {` ${result.annual_energy_kwh.toLocaleString()} kWh/year`}
+</p>
+
+<div className="mt-3 grid grid-cols-3 gap-2 text-center">
+  <div className="rounded-md bg-surface p-2">
+    <span className="block font-mono text-[9px] uppercase text-ink-faint">
+      Scope 1
+    </span>
+    <span className="font-mono text-xs text-ink">
+      {result.scope1.toFixed(2)} t
+    </span>
+  </div>
+
+  <div className="rounded-md bg-surface p-2">
+    <span className="block font-mono text-[9px] uppercase text-ink-faint">
+      Scope 2
+    </span>
+    <span className="font-mono text-xs text-ink">
+      {result.scope2.toFixed(2)} t
+    </span>
+  </div>
+
+  <div className="rounded-md bg-surface p-2">
+    <span className="block font-mono text-[9px] uppercase text-ink-faint">
+      Scope 3
+    </span>
+    <span className="font-mono text-xs text-ink">
+      {result.scope3.toFixed(2)} t
+    </span>
+  </div>
+</div>
                 </div>
 
                 <Link
