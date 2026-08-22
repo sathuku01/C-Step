@@ -164,6 +164,19 @@ export interface EstimateResponse {
   notices?: EstimateNotice[];
 }
 
+export interface MicroEstimateResponse {
+  total_tonnes: number;
+  peer_tonnes: number;
+  scope1: number;
+  scope2: number;
+  scope3: number;
+  score: number;
+  savings_potential: number;
+  source: "live" | "mock";
+  monthly_energy_spend: number;
+  annual_energy_kwh: number;
+}
+
 export interface AnchorResult {
   tx_hash: string;
   token_id: number;
@@ -337,17 +350,26 @@ export async function estimateEmissions(input: EstimateRequest): Promise<Estimat
   });
 }
 
-export async function postEstimate(input: MicroEstimateInput): Promise<EstimateResponse> {
-  // Translate micro-calculator input to a real Climatiq factor estimate
-  const annualEnergyKwh = (input.monthlyEnergySpend || 0) * 12 * 2.5; // ~2.5 kWh per $
-  return estimateEmissions({
-    activity_id: "electricity-supply_grid-source_supplier_mix",
-    data_version: "^21",
-    region: "GB",
-    year: 2024,
-    parameters: {
-      energy: Math.max(10, annualEnergyKwh),
-      energy_unit: "kWh",
-    },
+// export async function postEstimate(input: MicroEstimateInput): Promise<EstimateResponse> {
+//   // Translate micro-calculator input to a real Climatiq factor estimate
+//   const annualEnergyKwh = (input.monthlyEnergySpend || 0) * 12 * 2.5; // ~2.5 kWh per $
+//   return estimateEmissions({
+//     activity_id: "electricity-supply_grid-source_supplier_mix",
+//     data_version: "^21",
+//     region: "GB",
+//     year: 2024,
+//     parameters: {
+//       energy: Math.max(10, annualEnergyKwh),
+//       energy_unit: "kWh",
+//     },
+//   });
+// }
+
+export async function postEstimate(
+  input: MicroEstimateInput,
+): Promise<MicroEstimateResponse> {
+  return request<MicroEstimateResponse>("/emissions/micro-estimate", {
+    method: "POST",
+    body: JSON.stringify(input),
   });
 }
